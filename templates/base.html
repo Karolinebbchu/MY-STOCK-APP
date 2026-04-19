@@ -4,6 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>{% block title %}股票分析{% endblock %}</title>
+  <link rel="icon" type="image/png" href="/logo.png" />
+  <link rel="apple-touch-icon" href="/logo.png" />
   <link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -49,7 +51,14 @@
       gap: .3rem;
     }
     .nav-back:hover { color: var(--accent); }
-    .nav-title { font-weight: 600; color: var(--text1); font-size: .95rem; flex: 1; }
+    .nav-title {
+      font-weight: 600; color: var(--text1); font-size: .95rem; flex: 1;
+      display: flex; align-items: center; gap: .45rem; min-width: 0;
+    }
+    .app-brand-logo {
+      width: 1.35rem; height: 1.35rem; object-fit: contain;
+      flex-shrink: 0; border-radius: 5px;
+    }
     .nav-actions { display: flex; gap: .5rem; align-items: center; }
 
     /* ── App shell (sidebar + main) ── */

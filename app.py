@@ -4,10 +4,11 @@ from pathlib import Path
 import requests
 import resend
 from apscheduler.schedulers.background import BackgroundScheduler
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, send_from_directory, abort
 from dotenv import load_dotenv
 
 _APP_DIR = Path(__file__).resolve().parent
+_LOGO_PATH = _APP_DIR / "logo.png"
 _ENV_FILE = _APP_DIR / ".env"
 # 你指定嘅絕對路徑（同專案內 .env 二選一試）
 _ENV_FILE_ABSOLUTE = Path(r"C:\Users\CHUCHU\OneDrive\桌面\Stock Predict App\.env")
@@ -250,6 +251,21 @@ def fetch_image_url(row_id):
 
 
 # ── Page routes ──────────────────────────────────────────
+
+@app.route("/logo.png")
+def logo_png():
+    if not _LOGO_PATH.is_file():
+        abort(404)
+    return send_from_directory(_APP_DIR, "logo.png", mimetype="image/png")
+
+
+@app.route("/favicon.ico")
+def favicon():
+    """Browsers default-request /favicon.ico; serve app logo (PNG bytes, PNG type)."""
+    if not _LOGO_PATH.is_file():
+        abort(404)
+    return send_from_directory(_APP_DIR, "logo.png", mimetype="image/png")
+
 
 @app.route("/")
 def index():

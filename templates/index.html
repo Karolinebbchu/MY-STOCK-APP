@@ -25,7 +25,20 @@
     gap: .6rem;
   }
 
-  .landing-icon { font-size: 3rem; line-height: 1; }
+  .landing-brand-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: .85rem;
+    flex-wrap: wrap;
+  }
+  .landing-brand-logo {
+    width: 3rem;
+    height: 3rem;
+    object-fit: contain;
+    border-radius: 12px;
+    flex-shrink: 0;
+  }
 
   .landing-title {
     font-size: 2rem;
@@ -117,8 +130,10 @@
 {% block content %}
 <div class="landing">
   <div class="landing-brand">
-    <div class="landing-icon">📈</div>
-    <h1 class="landing-title">股票分析系統</h1>
+    <div class="landing-brand-row">
+      <img src="/logo.png" alt="" class="landing-brand-logo" width="48" height="48" />
+      <h1 class="landing-title">股票分析系統</h1>
+    </div>
     <p class="landing-sub">選擇功能開始</p>
   </div>
 
