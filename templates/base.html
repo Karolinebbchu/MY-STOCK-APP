@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}股票分析{% endblock %}</title>
+  <link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg0: #080f1e;   --bg1: #0a1628;   --bg2: #0d1b2e;
+      --bg3: #131f35;   --bg4: #1a2a42;   --bg5: #1e293b;
+      --border: #1e3a5f44; --border2: #334155;
+      --text1: #e2e8f0; --text2: #cbd5e1; --text3: #94a3b8;
+      --muted: #64748b; --accent: #38bdf8; --accent2: #818cf8;
+    }
+
+    html, body { height: 100%; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg0);
+      color: var(--text2);
+      overflow: hidden;
+    }
+
+    a { color: inherit; text-decoration: none; }
+
+    /* ── Top nav bar ── */
+    .app-nav {
+      height: 46px;
+      background: var(--bg1);
+      border-bottom: 1px solid var(--border2);
+      display: flex;
+      align-items: center;
+      padding: 0 1.2rem;
+      gap: 1rem;
+      flex-shrink: 0;
+      z-index: 10;
+    }
+    .nav-back {
+      font-size: .82rem;
+      color: var(--muted);
+      cursor: pointer;
+      transition: color .15s;
+      display: flex;
+      align-items: center;
+      gap: .3rem;
+    }
+    .nav-back:hover { color: var(--accent); }
+    .nav-title { font-weight: 600; color: var(--text1); font-size: .95rem; flex: 1; }
+    .nav-actions { display: flex; gap: .5rem; align-items: center; }
+
+    /* ── App shell (sidebar + main) ── */
+    .app-shell {
+      display: flex;
+      height: calc(100vh - 46px);
+      overflow: hidden;
+    }
+
+    .sidebar {
+      width: 210px;
+      flex-shrink: 0;
+      background: var(--bg3);
+      border-right: 1px solid var(--border2);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .sidebar-header {
+      padding: .7rem 1rem;
+      font-size: .68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .1em;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border2);
+      flex-shrink: 0;
+    }
+
+    .sidebar-search {
+      padding: .5rem .7rem;
+      border-bottom: 1px solid var(--border2);
+      flex-shrink: 0;
+    }
+    .sidebar-search input {
+      width: 100%;
+      background: var(--bg1);
+      border: 1px solid var(--border2);
+      border-radius: 6px;
+      color: var(--text2);
+      font-size: .82rem;
+      padding: .35rem .6rem;
+      outline: none;
+    }
+    .sidebar-search input:focus { border-color: var(--accent); }
+
+    .sidebar-scroll { flex: 1; overflow-y: auto; padding: .3rem 0; }
+
+    .ticker-item {
+      display: flex;
+      align-items: center;
+      padding: .45rem 1rem;
+      font-size: .88rem;
+      color: var(--text3);
+      cursor: pointer;
+      border-left: 3px solid transparent;
+      transition: background .12s, color .12s, border-color .12s;
+      user-select: none;
+    }
+    .ticker-item:hover  { background: var(--bg2); color: var(--text2); }
+    .ticker-item.active { background: var(--bg2); color: var(--accent); border-left-color: var(--accent); font-weight: 600; }
+
+    .sidebar-nav-btn {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      padding: .6rem 1rem;
+      font-size: .88rem;
+      color: var(--text3);
+      cursor: pointer;
+      border: none;
+      background: transparent;
+      width: 100%;
+      text-align: left;
+      border-left: 3px solid transparent;
+      transition: background .12s, color .12s, border-color .12s;
+    }
+    .sidebar-nav-btn:hover  { background: var(--bg2); color: var(--text2); }
+    .sidebar-nav-btn.active { background: var(--bg2); color: var(--accent); border-left-color: var(--accent); font-weight: 600; }
+    .sidebar-nav-btn.btn-quiz { margin-top: auto; border-top: 1px solid var(--border2); color: var(--accent2); }
+    .sidebar-nav-btn.btn-quiz:hover { background: #2d1b5e44; }
+
+    /* ── Main pane ── */
+    .main-pane {
+      flex: 1;
+      overflow-y: auto;
+      background: var(--bg2);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .main-pane-body { padding: 1.4rem; flex: 1; }
+
+    .pane-title {
+      font-size: .8rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: var(--muted);
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+    }
+
+    /* ── Form styles ── */
+    .form-card {
+      background: var(--bg5);
+      border: 1px solid var(--border2);
+      border-radius: 10px;
+      padding: 1.2rem;
+      margin-bottom: 1.4rem;
+    }
+    .form-card-title {
+      font-size: .82rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: var(--muted);
+      margin-bottom: 1rem;
+    }
+
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .9rem; }
+    .form-group { display: flex; flex-direction: column; gap: .35rem; }
+    .form-group.full { grid-column: 1 / -1; }
+
+    label { font-size: .78rem; color: var(--text3); font-weight: 500; }
+
+    input[type=text], input[type=date], select, textarea {
+      background: var(--bg1);
+      border: 1px solid var(--border2);
+      border-radius: 7px;
+      color: var(--text1);
+      font-size: .88rem;
+      padding: .5rem .75rem;
+      outline: none;
+      transition: border-color .2s;
+      width: 100%;
+      font-family: inherit;
+    }
+    input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+    select option { background: var(--bg5); }
+    textarea { resize: vertical; min-height: 80px; }
+
+    /* ── Quill dark theme ── */
+    .ql-wrapper { border-radius: 8px; overflow: hidden; }
+
+    .ql-toolbar.ql-snow {
+      background: #0d1e36; border: 1px solid var(--border2);
+      border-bottom: 1px solid #1e3a5f; border-radius: 8px 8px 0 0;
+      padding: 5px 8px;
+    }
+    .ql-container.ql-snow {
+      background: var(--bg1); border: 1px solid var(--border2);
+      border-top: none; border-radius: 0 0 8px 8px;
+      font-family: inherit;
+    }
+    .ql-editor { min-height: 120px; max-height: 320px; overflow-y: auto;
+      font-size: .9rem; line-height: 1.6; color: var(--text2); padding: 10px 14px; }
+    .ql-editor.ql-blank::before { color: var(--muted); font-style: normal; }
+    .ql-editor p  { margin: 0 0 .15rem; }
+    .ql-editor h1 { font-size: 1.3em; color: var(--text1); }
+    .ql-editor h2 { font-size: 1.1em; color: var(--text1); }
+    .ql-editor ul, .ql-editor ol { padding-left: 1.4rem; }
+    .ql-editor strong { color: var(--text1); }
+    .ql-editor em     { color: var(--text3); }
+    .ql-editor a      { color: var(--accent); }
+    .ql-editor img { max-width: 100%; height: auto; border-radius: 6px; margin: .3rem 0; display: inline-block; vertical-align: middle; transition: opacity .2s; }
+    .ql-editor img.uploading { opacity: .4; outline: 2px dashed var(--accent); }
+
+    .ql-snow .ql-stroke { stroke: #7a8fa8 !important; }
+    .ql-snow .ql-fill   { fill:   #7a8fa8 !important; }
+    .ql-snow .ql-picker-label, .ql-snow .ql-picker-label::before { color: #7a8fa8; }
+    .ql-snow .ql-toolbar button:hover .ql-stroke,
+    .ql-snow .ql-toolbar button.ql-active .ql-stroke { stroke: var(--accent) !important; }
+    .ql-snow .ql-toolbar button:hover .ql-fill,
+    .ql-snow .ql-toolbar button.ql-active .ql-fill   { fill:   var(--accent) !important; }
+    .ql-snow .ql-picker-options { background: var(--bg5); border-color: var(--border2); border-radius: 6px; }
+    .ql-snow .ql-picker-item:hover { color: var(--accent); }
+    .ql-snow .ql-color-picker .ql-picker-options { padding: 4px; }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      gap: .4rem; padding: .55rem 1.1rem; border: none; border-radius: 7px;
+      font-size: .85rem; font-weight: 600; cursor: pointer;
+      transition: opacity .15s, transform .1s; white-space: nowrap; font-family: inherit;
+    }
+    .btn:active  { transform: scale(.97); }
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
+
+    .btn-primary   { background: linear-gradient(135deg,var(--accent),var(--accent2)); color: #0f172a; }
+    .btn-secondary { background: var(--bg5); color: var(--text2); border: 1px solid var(--border2); }
+    .btn-ghost     { background: transparent; border: 1px solid var(--border2); color: var(--text3); padding: .3rem .65rem; font-size: .76rem; }
+    .btn-danger    { background: #7f1d1d; color: #fca5a5; border: 1px solid #b91c1c; padding: .3rem .65rem; font-size: .76rem; }
+    .btn-edit      { background: #1e3a5f; color: #7dd3fc; border: 1px solid #1d4ed8; padding: .3rem .65rem; font-size: .76rem; }
+    .btn-sm        { padding: .3rem .65rem; font-size: .76rem; }
+
+    /* ── Note cards ── */
+    .note-card {
+      background: var(--bg1);
+      border: 1px solid var(--border2);
+      border-left: 3px solid var(--border2);
+      border-radius: 9px;
+      margin-bottom: .65rem;
+      overflow: hidden;
+      transition: border-left-color .2s, box-shadow .2s;
+    }
+    .note-card:hover { border-left-color: var(--accent); box-shadow: 0 2px 14px #38bdf80c; }
+
+    .card-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: .45rem .8rem;
+      background: #0a1a2e;
+      border-bottom: 1px solid #1a2e48;
+      gap: .5rem; flex-wrap: wrap; min-height: 2.2rem;
+    }
+    .card-meta { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; flex: 1; }
+
+    .meta-date {
+      font-size: .75rem; color: var(--muted);
+      font-family: 'Courier New', monospace; white-space: nowrap;
+    }
+    .meta-source {
+      font-size: .7rem; color: var(--text3);
+      background: var(--bg5); border: 1px solid var(--border2);
+      border-radius: 4px; padding: .08rem .4rem; white-space: nowrap;
+    }
+    .card-name {
+      font-size: .82rem; font-weight: 700; color: var(--text1);
+    }
+    .card-body { padding: .8rem .85rem; }
+    .action-btns { display: flex; gap: .25rem; flex-shrink: 0; }
+
+    /* ── Rich content ── */
+    .rich-content { word-break: break-word; line-height: 1.55; color: var(--text2); }
+    .rich-content p     { margin: 0 0 .2rem; }
+    .rich-content h1    { font-size: 1.1em; color: var(--text1); margin-bottom: .2rem; }
+    .rich-content h2    { font-size: 1em;   color: var(--text1); margin-bottom: .15rem; }
+    .rich-content strong { color: var(--text1); }
+    .rich-content em     { color: var(--text3); }
+    .rich-content a      { color: var(--accent); }
+    .rich-content ul, .rich-content ol { padding-left: 1.2rem; margin: .1rem 0; }
+    .rich-content img {
+      max-width: 100%; max-height: 300px; object-fit: contain;
+      border-radius: 6px; margin: .3rem 0; display: block;
+      cursor: zoom-in; border: 1px solid var(--border2); transition: opacity .15s;
+    }
+    .rich-content img:hover { opacity: .85; }
+
+    /* ── Category & type labels ── */
+    .cat-label {
+      font-size: .68rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .07em; padding: .1rem .45rem; border-radius: 4px;
+      display: inline-block; white-space: nowrap;
+    }
+    .cat-prediction  { background: #1e3a5f; color: #7dd3fc; }
+    .cat-value-range { background: #2d1b5e; color: #c4b5fd; }
+    .cat-other       { background: #1e2a1e; color: #86efac; }
+    .cat-rise        { background: #14532d; color: #86efac; }
+    .cat-fall        { background: #7f1d1d; color: #fca5a5; }
+    .cat-lesson      { background: #713f12; color: #fcd34d; }
+
+    .ticker-badge {
+      display: inline-block; background: #1e3a5f; color: var(--accent);
+      border-radius: 5px; padding: .15rem .55rem; font-weight: 700; font-size: .88rem;
+    }
+
+    /* ── Misc ── */
+    .empty-msg  { color: var(--muted); font-size: .88rem; text-align: center; padding: 2rem 0; }
+    .results-meta { font-size: .78rem; color: var(--muted); margin-bottom: .7rem; }
+
+    .section-label {
+      font-size: .7rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .08em; color: var(--muted);
+      padding: .3rem .6rem; border-radius: 5px;
+      display: inline-flex; align-items: center; gap: .3rem;
+      margin-bottom: .6rem;
+    }
+
+    /* ── Toast ── */
+    .toast {
+      position: fixed; bottom: 1.4rem; right: 1.4rem;
+      padding: .65rem 1.1rem; border-radius: 8px;
+      font-size: .85rem; font-weight: 500;
+      opacity: 0; transform: translateY(8px);
+      transition: opacity .25s, transform .25s;
+      pointer-events: none; z-index: 9999;
+    }
+    .toast.show    { opacity: 1; transform: translateY(0); }
+    .toast.success { background: #166534; color: #bbf7d0; border: 1px solid #15803d; }
+    .toast.error   { background: #7f1d1d; color: #fecaca; border: 1px solid #b91c1c; }
+
+    /* ── Upload chip ── */
+    .upload-chip {
+      display: inline-flex; align-items: center; gap: .4rem;
+      background: #1e3a5f; color: #7dd3fc; border-radius: 6px;
+      padding: .25rem .6rem; font-size: .76rem; font-weight: 600;
+      position: fixed; bottom: 4rem; right: 1.4rem; z-index: 9998;
+      opacity: 0; transform: translateY(6px);
+      transition: opacity .2s, transform .2s; pointer-events: none;
+    }
+    .upload-chip.show { opacity: 1; transform: translateY(0); }
+    .upload-chip .spinner {
+      width: 11px; height: 11px; border: 2px solid #7dd3fc44;
+      border-top-color: #7dd3fc; border-radius: 50%;
+      animation: spin .6s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Lightbox ── */
+    .lightbox {
+      display: none; position: fixed; inset: 0;
+      background: #000000cc; backdrop-filter: blur(6px);
+      z-index: 2000; align-items: center; justify-content: center; cursor: zoom-out;
+    }
+    .lightbox.open { display: flex; }
+    .lightbox img  { max-width: 92vw; max-height: 92vh; border-radius: 10px; box-shadow: 0 0 60px #0008; cursor: default; }
+    .lightbox-close { position: absolute; top: 1rem; right: 1.2rem; background: var(--bg5); border: 1px solid var(--border2); color: var(--text1); border-radius: 50%; width: 2rem; height: 2rem; font-size: 1rem; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+
+    /* ── Modals ── */
+    .modal-backdrop { display: none; position: fixed; inset: 0; background: #00000099; backdrop-filter: blur(3px); z-index: 1000; align-items: center; justify-content: center; }
+    .modal-backdrop.open { display: flex; }
+    .modal { background: var(--bg5); border: 1px solid var(--border2); border-radius: 13px; padding: 1.6rem; width: min(560px,95vw); display: flex; flex-direction: column; gap: .9rem; max-height: 92vh; overflow-y: auto; }
+    .modal h3 { font-size: .95rem; font-weight: 700; color: var(--text1); }
+    .modal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem; }
+    .modal-grid .full { grid-column: 1 / -1; }
+    .modal-actions { display: flex; gap: .5rem; justify-content: flex-end; margin-top: .3rem; }
+    #editEditor .ql-editor { min-height: 140px; max-height: 260px; }
+
+    /* ── Confirm dialog ── */
+    .confirm-backdrop { display: none; position: fixed; inset: 0; background: #00000099; backdrop-filter: blur(3px); z-index: 1100; align-items: center; justify-content: center; }
+    .confirm-backdrop.open { display: flex; }
+    .confirm-box { background: var(--bg5); border: 1px solid #7f1d1d; border-radius: 11px; padding: 1.5rem; width: min(340px,95vw); text-align: center; }
+    .confirm-box p { color: var(--text2); margin-bottom: 1.1rem; line-height: 1.5; }
+    .confirm-actions { display: flex; gap: .5rem; justify-content: center; }
+
+    {% block styles %}{% endblock %}
+  </style>
+</head>
+<body>
+
+{% block content %}{% endblock %}
+
+<!-- ── Shared overlays ── -->
+<div class="lightbox" id="lightbox" onclick="closeLightbox()">
+  <button class="lightbox-close" onclick="closeLightbox()">✕</button>
+  <img id="lightboxImg" src="" alt="" onclick="event.stopPropagation()" />
+</div>
+
+<div class="confirm-backdrop" id="confirmBackdrop">
+  <div class="confirm-box">
+    <p id="confirmMsg"></p>
+    <div class="confirm-actions">
+      <button class="btn btn-ghost"  onclick="closeConfirm()">取消</button>
+      <button class="btn btn-danger" id="confirmOkBtn">確認</button>
+    </div>
+  </div>
+</div>
+
+<div class="upload-chip" id="uploadChip"><div class="spinner"></div> 圖片上傳中…</div>
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
+<script>
+/* ════════════════ Common utilities ════════════════ */
+
+function showToast(msg, type = 'success') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `toast ${type} show`;
+  setTimeout(() => { t.className = 'toast'; }, 3200);
+}
+
+function esc(str) {
+  return String(str ?? '')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function contentCell(content) {
+  if (!content) return '<span style="color:var(--muted)">—</span>';
+  const isHtml = /<[a-zA-Z]/.test(content);
+  return `<div class="rich-content">${isHtml ? content : esc(content)}</div>`;
+}
+
+function openLightbox(url) {
+  document.getElementById('lightboxImg').src = url;
+  document.getElementById('lightbox').classList.add('open');
+}
+function closeLightbox() {
+  document.getElementById('lightbox').classList.remove('open');
+  document.getElementById('lightboxImg').src = '';
+}
+
+let _confirmCb = null;
+function showConfirm(msg, cb) {
+  _confirmCb = cb;
+  document.getElementById('confirmMsg').textContent = msg;
+  document.getElementById('confirmBackdrop').classList.add('open');
+  document.getElementById('confirmOkBtn').onclick = () => {
+    const fn = _confirmCb;   // capture before closeConfirm clears it
+    closeConfirm();
+    if (fn) fn();
+  };
+}
+function closeConfirm() {
+  document.getElementById('confirmBackdrop').classList.remove('open');
+  _confirmCb = null;
+}
+
+/* ════════════════ Image upload helpers ════════════════ */
+let activeUploads = 0;
+
+function showUploadChip(show) {
+  document.getElementById('uploadChip').classList.toggle('show', show);
+}
+
+async function uploadToServer(blob, name = 'image.png') {
+  const fd = new FormData();
+  fd.append('image', blob, name);
+  const res = await fetch('/upload_image', { method: 'POST', body: fd });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const json = await res.json();
+  if (!json.url) throw new Error('no url');
+  return json.url;
+}
+
+function dataURLtoBlob(dataUrl) {
+  const [header, data] = dataUrl.split(',');
+  const mime = (header.match(/:(.*?);/) || ['','image/png'])[1];
+  const bytes = atob(data);
+  const arr = new Uint8Array(bytes.length);
+  for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+  return new Blob([arr], { type: mime });
+}
+
+function uploadDataImages(q) {
+  const imgs = Array.from(q.root.querySelectorAll('img[src^="data:"]:not([data-uploading])'));
+  if (!imgs.length) return;
+  imgs.forEach(img => {
+    img.dataset.uploading = '1';
+    img.classList.add('uploading');
+    activeUploads++;
+    showUploadChip(true);
+    uploadToServer(dataURLtoBlob(img.src), 'paste.png')
+      .then(url  => { img.src = url; img.classList.remove('uploading'); delete img.dataset.uploading; })
+      .catch(()  => { img.remove(); showToast('圖片上傳失敗', 'error'); })
+      .finally(() => { activeUploads--; if (activeUploads <= 0) { activeUploads = 0; showUploadChip(false); } });
+  });
+}
+
+async function processEditorContent(q) {
+  while (activeUploads > 0) await new Promise(r => setTimeout(r, 300));
+  const rem = q.root.querySelectorAll('img[src^="data:"]');
+  if (rem.length) { uploadDataImages(q); await new Promise(r => setTimeout(r, 2000)); }
+  const html = q.root.innerHTML.trim();
+  return (html === '<p><br></p>' || html === '') ? '' : html;
+}
+
+const TOOLBAR = [
+  [{ header: [1, 2, false] }],
+  ['bold', 'italic', 'underline'],
+  [{ color: [] }],
+  [{ list: 'ordered' }, { list: 'bullet' }],
+  ['image'],
+  ['clean'],
+];
+
+function createQuill(containerId, placeholder) {
+  return new Quill(`#${containerId}`, { theme: 'snow', placeholder, modules: { toolbar: TOOLBAR } });
+}
+
+function setupImageHandlers(q) {
+  q.getModule('toolbar').addHandler('image', () => {
+    const inp = document.createElement('input');
+    inp.type = 'file'; inp.accept = 'image/*';
+    inp.onchange = async () => {
+      const file = inp.files[0]; if (!file) return;
+      const idx = (q.getSelection(true) || { index: q.getLength() }).index;
+      activeUploads++; showUploadChip(true);
+      try { const url = await uploadToServer(file, file.name); q.insertEmbed(idx, 'image', url, Quill.sources.USER); q.setSelection(idx+1, Quill.sources.SILENT); }
+      catch { showToast('圖片上傳失敗', 'error'); }
+      finally { activeUploads--; if (activeUploads <= 0) { activeUploads = 0; showUploadChip(false); } }
+    };
+    inp.click();
+  });
+
+  q.on('text-change', (delta, _o, src) => {
+    if (src !== 'user') return;
+    if (delta.ops.some(op => op.insert && typeof op.insert === 'object' && String(op.insert.image||'').startsWith('data:')))
+      requestAnimationFrame(() => uploadDataImages(q));
+  });
+
+  q.root.addEventListener('drop', async e => {
+    const files = Array.from(e.dataTransfer?.files||[]).filter(f=>f.type.startsWith('image/'));
+    if (!files.length) return;
+    e.preventDefault();
+    let idx = (q.getSelection(true)||{index:q.getLength()}).index;
+    for (const file of files) {
+      activeUploads++; showUploadChip(true);
+      try { const url = await uploadToServer(file,file.name); q.insertEmbed(idx,'image',url,Quill.sources.USER); idx++; }
+      catch { showToast('圖片上傳失敗','error'); }
+      finally { activeUploads--; if (activeUploads<=0){activeUploads=0;showUploadChip(false);} }
+    }
+  });
+}
+
+/* ════════════════ Card templates (shared) ════════════════ */
+const rowCache = {};
+
+function noteCardHtml(row, showCategory = false) {
+  const catClass = { 'Prediction':'cat-prediction', 'Value Range':'cat-value-range' };
+  const catTag = showCategory
+    ? `<span class="cat-label ${catClass[row.category]||'cat-other'}">${esc(row.category)}</span>`
+    : '';
+  const src = row.source ? `<span class="meta-source">${esc(row.source)}</span>` : '';
+  return `<div class="note-card" id="row-${row.id}">
+    <div class="card-header">
+      <div class="card-meta">
+        <span class="meta-date">📅 ${esc(row.date)}</span>${catTag}${src}
+      </div>
+      <div class="action-btns">
+        <button class="btn btn-edit"   onclick="openEditNote(${row.id})">✏️</button>
+        <button class="btn btn-danger" onclick="deleteNote(${row.id})">🗑</button>
+      </div>
+    </div>
+    <div class="card-body">${contentCell(row.content)}</div>
+  </div>`;
+}
+
+/* Delegated image click → lightbox */
+document.addEventListener('click', e => {
+  if (e.target.tagName === 'IMG' && e.target.closest('.rich-content')) openLightbox(e.target.src);
+});
+
+/* Keyboard shortcuts */
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { closeLightbox(); closeConfirm(); }
+});
+</script>
+
+{% block scripts %}{% endblock %}
+</body>
+</html>

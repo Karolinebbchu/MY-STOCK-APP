@@ -1,0 +1,348 @@
+{% extends "base.html" %}
+{% block title %}Pattern 測驗{% endblock %}
+
+{% block styles %}
+  body { overflow: auto; }
+
+  .quiz-shell {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: radial-gradient(ellipse at 20% 30%, #0f2a4a33 0%, transparent 55%),
+                radial-gradient(ellipse at 80% 70%, #2d1b5e22 0%, transparent 55%),
+                var(--bg0);
+  }
+
+  .quiz-nav {
+    height: 52px;
+    background: var(--bg1);
+    border-bottom: 1px solid var(--border2);
+    display: flex;
+    align-items: center;
+    padding: 0 1.4rem;
+    gap: 1rem;
+    flex-shrink: 0;
+  }
+  .quiz-nav-title { font-weight: 700; color: var(--text1); flex: 1; }
+  .quiz-progress-text { font-size: .82rem; color: var(--muted); }
+
+  .quiz-main {
+    flex: 1;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 2.5rem 1.5rem;
+  }
+
+  .quiz-card {
+    background: var(--bg3);
+    border: 1px solid var(--border2);
+    border-radius: 16px;
+    width: min(720px, 100%);
+    overflow: hidden;
+    box-shadow: 0 8px 40px #00000044;
+  }
+
+  .quiz-card-header {
+    background: var(--bg1);
+    border-bottom: 1px solid var(--border2);
+    padding: .75rem 1.3rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .quiz-q-label { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+
+  .progress-bar-wrap {
+    flex: 1;
+    height: 4px;
+    background: var(--bg5);
+    border-radius: 2px;
+    margin: 0 1rem;
+    overflow: hidden;
+  }
+  .progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    border-radius: 2px;
+    transition: width .35s ease;
+  }
+
+  .quiz-card-body { padding: 1.4rem; }
+
+  .quiz-content-area {
+    background: var(--bg5);
+    border: 1px solid var(--border2);
+    border-radius: 10px;
+    padding: 1.1rem;
+    min-height: 160px;
+    max-height: 52vh;
+    overflow-y: auto;
+  }
+
+  .quiz-mask-hint {
+    text-align: center;
+    color: var(--muted);
+    font-size: .82rem;
+    padding: .6rem 0 .3rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: .4rem;
+  }
+
+  .quiz-answer-reveal {
+    background: var(--bg1);
+    border: 1px solid var(--border2);
+    border-radius: 10px;
+    padding: .9rem 1.1rem;
+    margin-top: .9rem;
+    display: flex;
+    align-items: center;
+    gap: .8rem;
+    flex-wrap: wrap;
+    animation: fadeSlide .25s ease;
+  }
+  @keyframes fadeSlide { from { opacity:0; transform:translateY(-6px); } to { opacity:1; transform:none; } }
+
+  .answer-name { font-weight: 700; color: var(--text1); font-size: .95rem; }
+
+  .quiz-rating {
+    display: flex;
+    gap: .7rem;
+    margin-top: 1rem;
+    justify-content: center;
+    animation: fadeSlide .25s ease;
+    flex-wrap: wrap;
+  }
+
+  .btn-good   { background: #14532d; color: #86efac; border: 1px solid #166534; font-size: .88rem; padding: .55rem 1.3rem; }
+  .btn-ok     { background: #1e3a5f; color: #7dd3fc; border: 1px solid #1d4ed8; font-size: .88rem; padding: .55rem 1.3rem; }
+  .btn-bad    { background: #7f1d1d; color: #fca5a5; border: 1px solid #b91c1c; font-size: .88rem; padding: .55rem 1.3rem; }
+
+  .quiz-show-btn-row {
+    display: flex;
+    justify-content: center;
+    margin-top: 1.2rem;
+  }
+
+  /* Empty / Done screens */
+  .quiz-center {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1.2rem;
+    padding: 3rem 1.5rem;
+    text-align: center;
+  }
+  .quiz-center-icon { font-size: 3.5rem; }
+  .quiz-center h2   { font-size: 1.4rem; font-weight: 700; color: var(--text1); }
+  .quiz-center p    { color: var(--muted); font-size: .9rem; }
+
+  .summary-grid {
+    display: flex;
+    gap: 1rem;
+    margin-top: .5rem;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .summary-item {
+    background: var(--bg3);
+    border: 1px solid var(--border2);
+    border-radius: 10px;
+    padding: .8rem 1.4rem;
+    text-align: center;
+  }
+  .summary-num  { font-size: 1.8rem; font-weight: 800; color: var(--text1); }
+  .summary-lbl  { font-size: .73rem; color: var(--muted); margin-top: .2rem; }
+{% endblock %}
+
+{% block content %}
+<div class="quiz-shell" id="quizShell">
+
+  <!-- Loading screen (initial) -->
+  <div id="loadingScreen" class="quiz-center">
+    <div class="quiz-center-icon">🧠</div>
+    <h2>載入題目中…</h2>
+  </div>
+
+  <!-- No questions screen -->
+  <div id="emptyScreen" class="quiz-center" style="display:none;">
+    <div class="quiz-center-icon">🎉</div>
+    <h2>今天沒有需要複習的 Pattern！</h2>
+    <p>所有 Pattern 都還不到複習日期，明天再來吧。</p>
+    <a href="/patterns" class="btn btn-primary">← 返回 Pattern 庫</a>
+  </div>
+
+  <!-- Quiz screen -->
+  <div id="quizScreen" style="display:none; flex-direction:column; min-height:100vh;">
+    <!-- Nav -->
+    <div class="quiz-nav">
+      <span class="quiz-nav-title">🧠 Pattern 測驗</span>
+      <span class="quiz-progress-text" id="progressText"></span>
+      <button class="btn btn-ghost" onclick="exitQuiz()">✕ 離開</button>
+    </div>
+
+    <!-- Main -->
+    <div class="quiz-main">
+      <div class="quiz-card">
+        <div class="quiz-card-header">
+          <span class="quiz-q-label" id="qLabel">問題</span>
+          <div class="progress-bar-wrap"><div class="progress-bar-fill" id="progressBar" style="width:0%"></div></div>
+        </div>
+        <div class="quiz-card-body">
+          <!-- Content (shown) -->
+          <div class="quiz-content-area" id="quizContent"></div>
+
+          <!-- Mask hint -->
+          <div class="quiz-mask-hint">🙈 名稱與類型已遮蔽，請根據內容作答</div>
+
+          <!-- Show answer button -->
+          <div class="quiz-show-btn-row" id="showAnswerRow">
+            <button class="btn btn-secondary" onclick="showAnswer()" style="padding:.6rem 2rem;font-size:.9rem;">
+              👁 顯示答案
+            </button>
+          </div>
+
+          <!-- Answer reveal (hidden initially) -->
+          <div id="answerReveal" style="display:none;">
+            <div class="quiz-answer-reveal">
+              <span class="answer-name" id="answerName"></span>
+              <span class="cat-label" id="answerType"></span>
+            </div>
+            <div class="quiz-rating">
+              <button class="btn btn-good" onclick="rate('好熟')">😊 好熟 <small style="font-weight:400;">(7天後)</small></button>
+              <button class="btn btn-ok"   onclick="rate('一般熟')">🤔 一般熟 <small style="font-weight:400;">(2天後)</small></button>
+              <button class="btn btn-bad"  onclick="rate('答錯')">😢 答錯 <small style="font-weight:400;">(明天)</small></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Done screen -->
+  <div id="doneScreen" style="display:none;" class="quiz-center">
+    <div class="quiz-center-icon">🏆</div>
+    <h2>測驗完成！</h2>
+    <p id="doneMsg"></p>
+    <div class="summary-grid" id="summaryGrid"></div>
+    <div style="display:flex;gap:.8rem;margin-top:.5rem;">
+      <button class="btn btn-primary"   onclick="restartQuiz()">🔄 再來一次</button>
+      <a href="/patterns" class="btn btn-secondary">← 返回 Pattern 庫</a>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  let questions  = [];
+  let currentIdx = 0;
+  const tally    = { '好熟': 0, '一般熟': 0, '答錯': 0 };
+
+  async function initQuiz() {
+    const res  = await fetch('/api/quiz');
+    const json = await res.json();
+
+    if (!res.ok || !json.questions || !json.questions.length) {
+      show('emptyScreen'); return;
+    }
+
+    questions  = json.questions;
+    currentIdx = 0;
+    tally['好熟'] = tally['一般熟'] = tally['答錯'] = 0;
+
+    show('quizScreen');
+    renderQuestion(0);
+  }
+
+  function renderQuestion(idx) {
+    const q     = questions[idx];
+    const total = questions.length;
+
+    document.getElementById('qLabel').textContent       = `問題 ${idx + 1} / ${total}`;
+    document.getElementById('progressText').textContent = `${idx + 1} / ${total}`;
+    document.getElementById('progressBar').style.width  = `${((idx + 1) / total) * 100}%`;
+    document.getElementById('quizContent').innerHTML    = contentCell(q.content);
+
+    /* reset answer area */
+    document.getElementById('showAnswerRow').style.display = '';
+    document.getElementById('answerReveal').style.display  = 'none';
+  }
+
+  function showAnswer() {
+    const q         = questions[currentIdx];
+    const typeClass =
+      q.pattern_type === '上升' ? 'cat-rise'
+      : q.pattern_type === '下跌' ? 'cat-fall'
+      : 'cat-lesson';
+
+    document.getElementById('answerName').textContent  = q.name || '';
+    const typeEl = document.getElementById('answerType');
+    typeEl.textContent  = q.pattern_type || '';
+    typeEl.className    = `cat-label ${typeClass}`;
+
+    document.getElementById('showAnswerRow').style.display = 'none';
+    document.getElementById('answerReveal').style.display  = '';
+  }
+
+  async function rate(result) {
+    const q = questions[currentIdx];
+    tally[result] = (tally[result] || 0) + 1;
+
+    /* fire-and-forget (don't block UI) */
+    fetch(`/api/quiz/review/${q.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ result }),
+    }).catch(() => {});
+
+    currentIdx++;
+    if (currentIdx >= questions.length) {
+      showDone();
+    } else {
+      renderQuestion(currentIdx);
+    }
+  }
+
+  function showDone() {
+    show('doneScreen');
+    const total = questions.length;
+    document.getElementById('doneMsg').textContent =
+      `完成了 ${total} 道題！以下是你的成績：`;
+    document.getElementById('summaryGrid').innerHTML = [
+      { num: tally['好熟'],   lbl: '😊 好熟',   cls: 'cat-rise' },
+      { num: tally['一般熟'], lbl: '🤔 一般熟',  cls: 'cat-prediction' },
+      { num: tally['答錯'],   lbl: '😢 答錯',    cls: 'cat-fall' },
+    ].map(s => `<div class="summary-item">
+      <div class="summary-num">${s.num}</div>
+      <div class="summary-lbl">${s.lbl}</div>
+    </div>`).join('');
+  }
+
+  function restartQuiz() {
+    show('loadingScreen');
+    initQuiz();
+  }
+
+  function exitQuiz() {
+    if (confirm('你確定離開嗎？學完未呀？')) {
+      window.location.href = '/patterns';
+    }
+  }
+
+  function show(id) {
+    ['loadingScreen','emptyScreen','quizScreen','doneScreen'].forEach(s => {
+      const el = document.getElementById(s);
+      if (el) el.style.display = s === id ? 'flex' : 'none';
+    });
+  }
+
+  initQuiz();
+</script>
+{% endblock %}

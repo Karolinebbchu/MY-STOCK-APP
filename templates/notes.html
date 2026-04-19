@@ -1,0 +1,597 @@
+{% extends "base.html" %}
+{% block title %}股票預測筆記{% endblock %}
+
+{% block styles %}
+  .ticker-count { font-size: .68rem; color: var(--muted); margin-left: auto; }
+
+  /* ── Wide, tall note-input modals ── */
+  #newNoteBackdrop .modal,
+  #editNoteBackdrop .modal {
+    width: min(940px, 92vw);
+    max-height: 96vh;
+    padding: 2rem 2.2rem;
+    gap: 1.1rem;
+  }
+
+  #newNoteBackdrop h3,
+  #editNoteBackdrop h3 {
+    font-size: 1.1rem;
+  }
+
+  #newNoteBackdrop label,
+  #editNoteBackdrop label {
+    font-size: .88rem;
+  }
+
+  #newNoteBackdrop input,
+  #newNoteBackdrop select,
+  #editNoteBackdrop input,
+  #editNoteBackdrop select {
+    font-size: .95rem;
+    padding: .65rem .9rem;
+  }
+
+  /* Tall rich-text editors */
+  #newEditor .ql-editor,
+  #editEditor .ql-editor {
+    min-height: 500px;
+    max-height: 58vh;
+    font-size: 1rem;
+    line-height: 1.75;
+  }
+
+  /* Big action buttons, centered */
+  #newNoteBackdrop .modal-actions,
+  #editNoteBackdrop .modal-actions {
+    gap: .8rem;
+    padding-top: .4rem;
+    justify-content: center;
+  }
+
+  #newNoteBackdrop .modal-actions .btn,
+  #editNoteBackdrop .modal-actions .btn {
+    padding: .85rem 2.8rem;
+    font-size: .98rem;
+    border-radius: 9px;
+    min-width: 130px;
+  }
+
+  .sidebar-backup {
+    flex-shrink: 0;
+    border-top: 1px solid var(--border2);
+    padding: .5rem .45rem .65rem;
+    display: flex;
+    flex-direction: column;
+    gap: .35rem;
+    background: var(--bg3);
+  }
+  .sidebar-backup .sidebar-nav-btn {
+    font-size: .78rem;
+    padding: .5rem .65rem;
+    white-space: normal;
+    line-height: 1.25;
+  }
+
+  #importBackupBackdrop .modal {
+    width: min(880px, 94vw);
+    max-height: 92vh;
+  }
+  #importJsonText {
+    width: 100%;
+    min-height: 280px;
+    max-height: 48vh;
+    font-family: ui-monospace, Consolas, monospace;
+    font-size: .8rem;
+    line-height: 1.45;
+    background: var(--bg1);
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    color: var(--text2);
+    padding: .75rem 1rem;
+    resize: vertical;
+  }
+  #importJsonError {
+    display: none;
+    color: #fca5a5;
+    font-size: .82rem;
+    background: #7f1d1d44;
+    border: 1px solid #b91c1c;
+    border-radius: 7px;
+    padding: .5rem 1rem;
+    word-break: break-word;
+  }
+  .import-file-row {
+    display: flex;
+    flex-direction: column;
+    gap: .45rem;
+  }
+  .import-file-row input[type="file"] {
+    font-size: .78rem;
+    color: var(--text3);
+  }
+  .import-file-hint {
+    font-size: .75rem;
+    color: var(--muted);
+  }
+{% endblock %}
+
+{% block content %}
+<!-- Top nav -->
+<div class="app-nav">
+  <a href="/" class="nav-back">← 首頁</a>
+  <span class="nav-title">📝 股票預測筆記</span>
+  <div class="nav-actions">
+    <button class="btn btn-primary" onclick="openNewNoteModal()" style="padding:.5rem 1.3rem;font-size:.88rem;">＋ 新增筆記</button>
+  </div>
+</div>
+
+<!-- Shell -->
+<div class="app-shell">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-header">Tickers</div>
+    <div class="sidebar-search">
+      <input id="tickerSearch" type="text" placeholder="篩選…" oninput="filterTickers(this.value)" />
+    </div>
+    <div class="sidebar-scroll" id="tickerList">
+      <p class="empty-msg" style="padding:1rem;">載入中…</p>
+    </div>
+    <div class="sidebar-backup">
+      <button type="button" class="sidebar-nav-btn" id="btnBackupSend" onclick="sendBackupEmail()">🚀 立即備份</button>
+      <button type="button" class="sidebar-nav-btn" onclick="openImportBackupModal()">📤 匯入備份檔</button>
+    </div>
+  </aside>
+
+  <!-- Main pane -->
+  <div class="main-pane">
+    <div class="main-pane-body" id="notesArea">
+      <p class="empty-msg" style="padding-top:4rem;">
+        ← 點擊左側 Ticker 查看紀錄
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- New Note Modal -->
+<div class="modal-backdrop" id="newNoteBackdrop" onclick="closeNewNoteIfOutside(event)">
+  <div class="modal">
+    <h3>＋ 新增筆記</h3>
+    <div class="modal-grid">
+      <div class="form-group">
+        <label>股票代號</label>
+        <input id="newSymbol" type="text" placeholder="AAPL、2330" autocomplete="off" />
+      </div>
+      <div class="form-group">
+        <label>類別</label>
+        <select id="newCategory">
+          <option value="Prediction">Prediction（預測）</option>
+          <option value="Value Range">Value Range（價格區間）</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>日期</label>
+        <input id="newDate" type="date" />
+      </div>
+      <div class="form-group">
+        <label>資料來源</label>
+        <input id="newSource" type="text" placeholder="卜卦、新聞、財報…" autocomplete="off" />
+      </div>
+      <div class="form-group full">
+        <label>內容 <span style="color:var(--muted);font-weight:400;">（Ctrl+V 貼圖 / 拖曳圖片）</span></label>
+        <div class="ql-wrapper"><div id="newEditor"></div></div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeNewNote()">取消</button>
+      <button class="btn btn-primary" id="newSaveBtn" onclick="saveNewNote()">💾 存檔</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Note Modal -->
+<div class="modal-backdrop" id="editNoteBackdrop" onclick="closeEditNoteIfOutside(event)">
+  <div class="modal">
+    <h3>✏️ 編輯筆記</h3>
+    <input type="hidden" id="editNoteId" />
+    <div class="modal-grid">
+      <div class="form-group">
+        <label>類別</label>
+        <select id="editNoteCategory">
+          <option value="Prediction">Prediction（預測）</option>
+          <option value="Value Range">Value Range（價格區間）</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>日期</label>
+        <input id="editNoteDate" type="date" />
+      </div>
+      <div class="form-group full">
+        <label>資料來源</label>
+        <input id="editNoteSource" type="text" placeholder="來源…" autocomplete="off" />
+      </div>
+      <div class="form-group full">
+        <label>內容</label>
+        <div class="ql-wrapper"><div id="editEditor"></div></div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost"   onclick="closeEditNote()">取消</button>
+      <button class="btn btn-primary" id="editNoteSaveBtn" onclick="saveEditNote()">💾 儲存修改</button>
+    </div>
+  </div>
+</div>
+
+<!-- Import backup modal -->
+<div class="modal-backdrop" id="importBackupBackdrop" onclick="closeImportBackupIfOutside(event)">
+  <div class="modal">
+    <h3>📤 匯入備份檔</h3>
+    <p style="font-size:.82rem;color:var(--muted);margin:-.3rem 0 .6rem;line-height:1.45;">
+      上載郵件附件嘅 <code style="font-size:.78rem;">.json</code>，或貼上 JSON。須包含 <code style="font-size:.78rem;">stock_notes</code> ／ <code style="font-size:.78rem;">stock_patterns</code> 陣列；有 <code style="font-size:.78rem;">id</code> 會合併更新，無則新增。
+    </p>
+    <div class="form-group full import-file-row">
+      <label>備份檔（JSON）</label>
+      <input type="file" id="importBackupFile" accept=".json,application/json" />
+      <span class="import-file-hint">優先使用檔案上載；留空則用下方文字框。</span>
+    </div>
+    <div class="form-group full">
+      <label>或貼上 JSON</label>
+      <textarea id="importJsonText" placeholder='{ "stock_notes": [...], "stock_patterns": [...] }' spellcheck="false"></textarea>
+    </div>
+    <div id="importJsonError"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-ghost" onclick="closeImportBackupModal()">取消</button>
+      <button type="button" class="btn btn-primary" id="importBackupBtn" onclick="submitImportBackup()">💾 匯入還原</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  /* ── Init ── */
+  document.getElementById('newDate').valueAsDate = new Date();
+  loadTickers();
+
+  /* ── Quill (lazy) ── */
+  let quillNew = null, quillEditNote = null;
+
+  function getQuillNew() {
+    if (!quillNew) { quillNew = createQuill('newEditor','輸入內容… 可 Ctrl+V 貼圖'); setupImageHandlers(quillNew); }
+    return quillNew;
+  }
+  function getQuillEdit() {
+    if (!quillEditNote) { quillEditNote = createQuill('editEditor','輸入內容…'); setupImageHandlers(quillEditNote); }
+    return quillEditNote;
+  }
+
+  /* ── Tickers ── */
+  async function loadTickers() {
+    const res  = await fetch('/api/tickers');
+    const json = await res.json();
+    const list = document.getElementById('tickerList');
+    if (!json.tickers || !json.tickers.length) {
+      list.innerHTML = '<p class="empty-msg" style="padding:.8rem;">尚無資料</p>';
+      return;
+    }
+    list.innerHTML = json.tickers.map(t => `
+      <div class="ticker-item" onclick="selectTicker('${esc(t)}',this)">
+        ${esc(t)}
+      </div>`).join('');
+  }
+
+  function filterTickers(q) {
+    const lower = q.toLowerCase();
+    document.querySelectorAll('.ticker-item').forEach(el => {
+      el.style.display = el.textContent.trim().toLowerCase().includes(lower) ? '' : 'none';
+    });
+  }
+
+  let activeTicker = null;
+
+  async function selectTicker(symbol, el) {
+    document.querySelectorAll('.ticker-item').forEach(x => x.classList.remove('active'));
+    el.classList.add('active');
+    activeTicker = symbol;
+    document.getElementById('newSymbol').value = symbol;
+
+    const area = document.getElementById('notesArea');
+    area.innerHTML = '<p class="empty-msg">載入中…</p>';
+
+    const res  = await fetch(`/search?symbol=${encodeURIComponent(symbol)}`);
+    const json = await res.json();
+    if (!res.ok) { showToast(json.error || '載入失敗', 'error'); area.innerHTML=''; return; }
+
+    const grouped = json.grouped || {};
+    const cats    = Object.keys(grouped);
+    const total   = cats.reduce((n,c)=>n+grouped[c].length, 0);
+
+    if (!total) {
+      area.innerHTML = `<p class="empty-msg">「${esc(symbol)}」尚無筆記</p>`;
+      return;
+    }
+
+    const catClass = { 'Prediction':'cat-prediction','Value Range':'cat-value-range' };
+    let html = `<div class="results-meta">
+      <span class="ticker-badge">${esc(symbol)}</span>
+      &nbsp; 共 ${total} 筆
+    </div>`;
+
+    for (const cat of cats) {
+      const cls = catClass[cat] || 'cat-other';
+      html += `<div style="margin-bottom:1.2rem;">
+        <span class="section-label cat-label ${cls}">${esc(cat)}</span>
+        <span style="font-size:.72rem;color:var(--muted);margin-left:.3rem;">${grouped[cat].length} 筆</span>
+        <div style="margin-top:.4rem;">`;
+      for (const row of grouped[cat]) {
+        rowCache[row.id] = row;
+        html += noteCardHtml(row, false);
+      }
+      html += `</div></div>`;
+    }
+    area.innerHTML = html;
+  }
+
+  /* ── New Note Modal ── */
+  function openNewNoteModal() {
+    getQuillNew();
+    document.getElementById('newNoteBackdrop').classList.add('open');
+    setTimeout(() => getQuillNew().focus(), 80);
+  }
+  function closeNewNote() {
+    document.getElementById('newNoteBackdrop').classList.remove('open');
+  }
+  function closeNewNoteIfOutside(e) {
+    if (e.target === document.getElementById('newNoteBackdrop')) closeNewNote();
+  }
+
+  async function saveNewNote() {
+    const btn    = document.getElementById('newSaveBtn');
+    const symbol = document.getElementById('newSymbol').value.trim().toUpperCase();
+    const cat    = document.getElementById('newCategory').value;
+    const date   = document.getElementById('newDate').value;
+    const source = document.getElementById('newSource').value.trim();
+
+    if (!symbol || !date) { showToast('請填寫代號與日期','error'); return; }
+    btn.disabled = true; btn.textContent = '處理中…';
+
+    const content = await processEditorContent(getQuillNew());
+    if (!content) { showToast('請輸入內容','error'); btn.disabled=false; btn.textContent='💾 存檔'; return; }
+
+    const res  = await fetch('/save', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ symbol, category:cat, date, source, content }),
+    });
+    const json = await res.json();
+    if (res.ok) {
+      showToast(`✅ ${json.message}`);
+      closeNewNote();
+      getQuillNew().setContents([]);
+      document.getElementById('newSource').value = '';
+      if (activeTicker === symbol) {
+        document.querySelector(`.ticker-item.active`)?.click?.();
+      } else {
+        await loadTickers();
+      }
+    } else {
+      showToast(json.error || '儲存失敗','error');
+    }
+    btn.disabled=false; btn.textContent='💾 存檔';
+  }
+
+  /* ── Edit Note Modal ── */
+  function openEditNote(id) {
+    const row = rowCache[id]; if (!row) return;
+    const q = getQuillEdit();
+    document.getElementById('editNoteId').value          = row.id;
+    document.getElementById('editNoteCategory').value    = row.category || 'Prediction';
+    document.getElementById('editNoteDate').value        = row.date     || '';
+    document.getElementById('editNoteSource').value      = row.source   || '';
+    const c = row.content || '';
+    q.root.innerHTML = /<[a-zA-Z]/.test(c) ? c : '';
+    if (!/<[a-zA-Z]/.test(c)) q.setText(c);
+    document.getElementById('editNoteBackdrop').classList.add('open');
+    setTimeout(() => q.focus(), 80);
+  }
+  function closeEditNote() {
+    document.getElementById('editNoteBackdrop').classList.remove('open');
+  }
+  function closeEditNoteIfOutside(e) {
+    if (e.target === document.getElementById('editNoteBackdrop')) closeEditNote();
+  }
+
+  async function saveEditNote() {
+    const id     = document.getElementById('editNoteId').value;
+    const cat    = document.getElementById('editNoteCategory').value;
+    const date   = document.getElementById('editNoteDate').value;
+    const source = document.getElementById('editNoteSource').value.trim();
+    if (!date) { showToast('日期為必填','error'); return; }
+
+    const btn = document.getElementById('editNoteSaveBtn');
+    btn.disabled = true; btn.textContent = '處理中…';
+
+    const content = await processEditorContent(getQuillEdit());
+    if (!content) { showToast('請輸入內容','error'); btn.disabled=false; btn.textContent='💾 儲存修改'; return; }
+
+    const res  = await fetch(`/update/${id}`, {
+      method:'PATCH', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ category:cat, date, source, content }),
+    });
+    const json = await res.json();
+    if (res.ok) {
+      showToast('✅ 更新成功');
+      closeEditNote();
+      if (activeTicker) document.querySelector('.ticker-item.active')?.click?.();
+    } else {
+      showToast(json.error || '更新失敗','error');
+    }
+    btn.disabled=false; btn.textContent='💾 儲存修改';
+  }
+
+  /* ── Delete Note ── */
+  function deleteNote(id) {
+    console.log('[deleteNote] called with id =', id, typeof id);
+    showConfirm(`確定刪除這筆筆記？此動作無法復原。`, async () => {
+      console.log('[deleteNote] confirm callback fired, fetching DELETE /delete/' + id);
+      let res, json;
+      try {
+        res  = await fetch(`/delete/${id}`, { method: 'DELETE' });
+        json = await res.json();
+      } catch (e) {
+        showToast('網路錯誤，請稍後再試', 'error');
+        console.error('[deleteNote] network error:', e);
+        return;
+      }
+      console.log('[deleteNote] response', res.status, json);
+      if (res.ok) {
+        showToast('🗑 刪除成功');
+        document.getElementById(`row-${id}`)?.remove();
+        delete rowCache[id];
+        /* reload ticker list in case this was the last note for that ticker */
+        setTimeout(() => {
+          if (activeTicker) {
+            const active = document.querySelector('.ticker-item.active');
+            if (active) active.click();
+          }
+          loadTickers();
+        }, 400);
+      } else {
+        console.error(`[deleteNote] failed (HTTP ${res.status}):`, json);
+        showToast(json.error || '刪除失敗', 'error');
+        alert(`刪除失敗：${json.error || ''}\n\n詳細：${json.detail || '(無詳細)'}`);
+      }
+    });
+  }
+
+  /* ── Backup & import ── */
+  async function sendBackupEmail() {
+    const btn = document.getElementById('btnBackupSend');
+    if (!btn) return;
+    btn.disabled = true;
+    const prev = btn.textContent;
+    btn.textContent = '傳送中…';
+    try {
+      const res  = await fetch('/api/backup/send', { method: 'POST' });
+      const json = await res.json();
+      if (res.ok) {
+        const c = json.counts || {};
+        const att = json.attachment ? ` 附件：${json.attachment}` : '';
+        showToast(`✅ 已寄出（筆記 ${c.stock_notes ?? '?'}、Pattern ${c.stock_patterns ?? '?'}）${att}`);
+      } else {
+        showToast(json.error || '備份失敗', 'error');
+      }
+    } catch (e) {
+      showToast('網路錯誤', 'error');
+    }
+    btn.disabled = false;
+    btn.textContent = prev;
+  }
+
+  function openImportBackupModal() {
+    const err = document.getElementById('importJsonError');
+    if (err) { err.style.display = 'none'; err.textContent = ''; }
+    const fin = document.getElementById('importBackupFile');
+    if (fin) fin.value = '';
+    document.getElementById('importBackupBackdrop').classList.add('open');
+    setTimeout(() => document.getElementById('importBackupFile').focus(), 80);
+  }
+  function closeImportBackupModal() {
+    document.getElementById('importBackupBackdrop').classList.remove('open');
+  }
+  function closeImportBackupIfOutside(e) {
+    if (e.target === document.getElementById('importBackupBackdrop')) closeImportBackupModal();
+  }
+
+  async function submitImportBackup() {
+    const errEl = document.getElementById('importJsonError');
+    const btn   = document.getElementById('importBackupBtn');
+    const fileIn = document.getElementById('importBackupFile');
+    const file = fileIn && fileIn.files && fileIn.files[0];
+
+    errEl.style.display = 'none';
+    errEl.textContent = '';
+
+    btn.disabled = true;
+    const prev = btn.textContent;
+    btn.textContent = '匯入中…';
+
+    try {
+      let res, json;
+      if (file) {
+        const fd = new FormData();
+        fd.append('file', file);
+        res = await fetch('/api/backup/import', { method: 'POST', body: fd });
+      } else {
+        const raw = document.getElementById('importJsonText').value.trim();
+        if (!raw) {
+          errEl.textContent = '請選擇 JSON 檔案，或貼上 JSON 文字。';
+          errEl.style.display = '';
+          btn.disabled = false;
+          btn.textContent = prev;
+          return;
+        }
+        let data;
+        try {
+          data = JSON.parse(raw);
+        } catch (e) {
+          errEl.textContent = 'JSON 格式錯誤：' + e.message;
+          errEl.style.display = '';
+          btn.disabled = false;
+          btn.textContent = prev;
+          return;
+        }
+        res = await fetch('/api/backup/import', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        });
+      }
+      json = await res.json();
+      if (res.ok) {
+        const imp = json.imported || {};
+        const notes    = imp.stock_notes            ?? 0;
+        const noteSkip = imp.stock_notes_skipped    ?? 0;
+        const patterns = imp.stock_patterns         ?? 0;
+        const patSkip  = imp.stock_patterns_skipped ?? 0;
+        const errs     = imp.errors                 ?? 0;
+        let toastMsg =
+          `✅ 匯入完成：筆記新增 ${notes} 筆（重複略過 ${noteSkip}）、` +
+          `Pattern 新增 ${patterns} 筆（重複略過 ${patSkip}）`;
+        if (errs > 0) {
+          toastMsg += `｜⚠️ ${errs} 筆失敗，詳情見 Terminal`;
+          const errDetails = imp.error_details || [];
+          if (errDetails.length) {
+            errEl.textContent = '部分失敗：' + errDetails.slice(0, 3).join(' | ');
+            errEl.style.display = '';
+          }
+        }
+        showToast(toastMsg, errs > 0 ? 'warn' : 'success');
+        document.getElementById('importJsonText').value = '';
+        if (fileIn) fileIn.value = '';
+        if (errs === 0) closeImportBackupModal();
+        await loadTickers();
+        if (activeTicker) {
+          const active = document.querySelector('.ticker-item.active');
+          if (active) active.click();
+        }
+      } else {
+        errEl.textContent = json.error || '匯入失敗';
+        errEl.style.display = '';
+      }
+    } catch (e) {
+      errEl.textContent = '網路錯誤：' + e;
+      errEl.style.display = '';
+    }
+    btn.disabled = false;
+    btn.textContent = prev;
+  }
+
+  /* ── ESC close modals ── */
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      closeNewNote();
+      closeEditNote();
+      closeImportBackupModal();
+    }
+  });
+</script>
+{% endblock %}

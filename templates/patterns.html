@@ -1,0 +1,429 @@
+{% extends "base.html" %}
+{% block title %}Pattern 庫{% endblock %}
+
+{% block styles %}
+  .pattern-card {
+    background: var(--bg1);
+    border: 1px solid var(--border2);
+    border-left: 3px solid var(--border2);
+    border-radius: 9px;
+    margin-bottom: .65rem;
+    overflow: hidden;
+    transition: border-left-color .2s, box-shadow .2s;
+  }
+  .pattern-card:hover { border-left-color: var(--accent2); box-shadow: 0 2px 14px #818cf81a; }
+  .pattern-card .card-header { background: #0d1333; border-bottom: 1px solid #1a2048; }
+
+  /* Center pattern cards */
+  #patternsArea {
+    max-width: 920px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  /* Wide modals — new + edit */
+  #newPatternBackdrop .modal,
+  #editPatternBackdrop .modal {
+    width: min(920px, 92vw);
+    max-height: 96vh;
+    padding: 2rem 2.2rem;
+    gap: 1.1rem;
+  }
+  #newPatternBackdrop h3,
+  #editPatternBackdrop h3 { font-size: 1.1rem; }
+  #newPatternBackdrop label,
+  #editPatternBackdrop label { font-size: .9rem; }
+  #newPatternBackdrop input, #newPatternBackdrop select,
+  #editPatternBackdrop input, #editPatternBackdrop select {
+    font-size: .95rem; padding: .65rem .9rem;
+  }
+
+  /* Tall editors */
+  #patternFormEditor .ql-editor {
+    min-height: 500px; max-height: 58vh;
+    font-size: 1rem; line-height: 1.75;
+  }
+  #editPatternEditor .ql-editor {
+    min-height: 420px; max-height: 55vh;
+    font-size: 1rem; line-height: 1.75;
+  }
+
+  /* Big centred action buttons */
+  #newPatternBackdrop .modal-actions,
+  #editPatternBackdrop .modal-actions {
+    gap: .8rem; padding-top: .4rem; justify-content: center;
+  }
+  #newPatternBackdrop .modal-actions .btn,
+  #editPatternBackdrop .modal-actions .btn {
+    padding: .85rem 2.8rem; font-size: .98rem;
+    border-radius: 9px; min-width: 150px;
+  }
+{% endblock %}
+
+{% block content %}
+<!-- Top nav -->
+<div class="app-nav">
+  <a href="/" class="nav-back">← 首頁</a>
+  <span class="nav-title">📊 Pattern 庫</span>
+  <div class="nav-actions">
+    <button class="btn btn-primary" onclick="openNewPatternModal()" style="padding:.5rem 1.3rem;font-size:.88rem;">＋ 新增 Pattern</button>
+  </div>
+</div>
+
+<!-- Shell -->
+<div class="app-shell">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-header">Pattern 庫</div>
+    <div class="sidebar-scroll" style="display:flex;flex-direction:column;height:100%;">
+      <button class="sidebar-nav-btn" id="btnRise" onclick="loadPatterns('上升',this)">
+        📈 上升庫
+      </button>
+      <button class="sidebar-nav-btn" id="btnFall" onclick="loadPatterns('下跌',this)">
+        📉 下跌庫
+      </button>
+      <button class="sidebar-nav-btn" id="btnLesson" onclick="loadPatterns('教訓',this)">
+        📚 教訓庫
+      </button>
+      <div style="flex:1;"></div>
+      <a href="/quiz" class="sidebar-nav-btn btn-quiz">
+        🧠 進入測驗
+      </a>
+    </div>
+  </aside>
+
+  <!-- Main pane — shows pattern cards only -->
+  <div class="main-pane">
+    <div class="main-pane-body">
+      <div id="patternsArea">
+        <p class="empty-msg" style="padding-top:4rem;">
+          ← 點擊左側「上升庫」「下跌庫」或「教訓庫」查看
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- New Pattern Modal -->
+<div class="modal-backdrop" id="newPatternBackdrop" onclick="closeNewPatternIfOutside(event)">
+  <div class="modal">
+    <h3>＋ 新增 Pattern</h3>
+    <div class="modal-grid">
+      <div class="form-group">
+        <label>Pattern 名稱</label>
+        <input id="patternName" type="text" placeholder="例如：杯柄型態、頭肩頂…" autocomplete="off" />
+      </div>
+      <div class="form-group">
+        <label>類型</label>
+        <select id="patternType">
+          <option value="上升">📈 上升</option>
+          <option value="下跌">📉 下跌</option>
+          <option value="教訓">📚 教訓</option>
+        </select>
+      </div>
+      <div class="form-group full">
+        <label>內容 <span style="color:var(--muted);font-weight:400;">（Ctrl+V 貼圖 / 拖曳圖片）</span></label>
+        <div class="ql-wrapper"><div id="patternFormEditor"></div></div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost"   onclick="clearPatternForm()">✕ 取消</button>
+      <button class="btn btn-primary" id="savePatternBtn" onclick="savePattern()">💾 儲存 Pattern</button>
+    </div>
+    <div id="patternSaveError" style="display:none;color:#fca5a5;font-size:.82rem;background:#7f1d1d44;border:1px solid #b91c1c;border-radius:7px;padding:.5rem 1rem;word-break:break-word;margin-top:-.4rem;"></div>
+  </div>
+</div>
+
+<!-- Edit Pattern Modal -->
+<div class="modal-backdrop" id="editPatternBackdrop" onclick="closeEditPatternIfOutside(event)">
+  <div class="modal">
+    <h3>✏️ 編輯 Pattern</h3>
+    <input type="hidden" id="editPatternId" />
+    <div class="modal-grid">
+      <div class="form-group">
+        <label>Pattern 名稱</label>
+        <input id="editPatternName" type="text" autocomplete="off" />
+      </div>
+      <div class="form-group">
+        <label>類型</label>
+        <select id="editPatternType">
+          <option value="上升">📈 上升</option>
+          <option value="下跌">📉 下跌</option>
+          <option value="教訓">📚 教訓</option>
+        </select>
+      </div>
+      <div class="form-group full">
+        <label>內容</label>
+        <div class="ql-wrapper"><div id="editPatternEditor"></div></div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost"   onclick="closeEditPattern()">取消</button>
+      <button class="btn btn-primary" id="editPatternSaveBtn" onclick="saveEditPattern()">💾 儲存修改</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const patternCache = {};
+  let activePatternType = null;
+  let activeSidebarBtn  = null;
+
+  const patternLibLabel = { '上升': '📈 上升庫', '下跌': '📉 下跌庫', '教訓': '📚 教訓庫' };
+  function patternTypeClass(t) {
+    if (t === '上升') return 'cat-rise';
+    if (t === '下跌') return 'cat-fall';
+    return 'cat-lesson';
+  }
+
+  /* ── Quill (lazy) ── */
+  let quillForm = null, quillEditP = null;
+
+  function getQuillForm() {
+    if (!quillForm) { quillForm = createQuill('patternFormEditor','輸入圖形說明… 可 Ctrl+V 貼圖'); setupImageHandlers(quillForm); }
+    return quillForm;
+  }
+  function getQuillEditP() {
+    if (!quillEditP) { quillEditP = createQuill('editPatternEditor','輸入內容…'); setupImageHandlers(quillEditP); }
+    return quillEditP;
+  }
+
+  /* ── New Pattern Modal ── */
+  function openNewPatternModal() {
+    getQuillForm();  // init Quill lazily on first open
+    document.getElementById('newPatternBackdrop').classList.add('open');
+    setTimeout(() => getQuillForm().focus(), 80);
+  }
+  function closeNewPattern() {
+    document.getElementById('newPatternBackdrop').classList.remove('open');
+  }
+  function closeNewPatternIfOutside(e) {
+    if (e.target === document.getElementById('newPatternBackdrop')) clearPatternForm();
+  }
+
+  /* ── Load patterns ── */
+  async function loadPatterns(type, btn) {
+    activePatternType = type;
+    if (activeSidebarBtn) activeSidebarBtn.classList.remove('active');
+    if (btn) { btn.classList.add('active'); activeSidebarBtn = btn; }
+
+    const area = document.getElementById('patternsArea');
+    area.innerHTML = '<p class="empty-msg">載入中…</p>';
+
+    const res  = await fetch(`/api/patterns/${encodeURIComponent(type)}`);
+    const json = await res.json();
+
+    if (!res.ok) { showToast(json.error || '載入失敗','error'); area.innerHTML=''; return; }
+
+    const list = json.patterns || [];
+    if (!list.length) {
+      const label = patternLibLabel[type] || type;
+      area.innerHTML = `<p class="empty-msg">「${label}」尚無 Pattern</p>`;
+      return;
+    }
+
+    const typeClass = patternTypeClass(type);
+    let html = `<div class="results-meta">
+      <span class="cat-label ${typeClass}">${type}</span>
+      &nbsp; 共 ${list.length} 個
+    </div>`;
+
+    for (const p of list) {
+      patternCache[p.id] = p;
+      html += patternCardHtml(p);
+    }
+    area.innerHTML = html;
+  }
+
+  function patternCardHtml(p) {
+    const typeClass = patternTypeClass(p.pattern_type);
+    const review    = p.next_review_date || '';
+    return `<div class="pattern-card" id="pattern-${p.id}">
+      <div class="card-header">
+        <div class="card-meta">
+          <span class="card-name">${esc(p.name)}</span>
+          <span class="cat-label ${typeClass}">${esc(p.pattern_type)}</span>
+          ${review ? `<span class="meta-date" style="font-size:.68rem;">複習: ${review}</span>` : ''}
+        </div>
+        <div class="action-btns">
+          <button class="btn btn-edit"   onclick="openEditPattern(${p.id})">✏️</button>
+          <button class="btn btn-danger" onclick="deletePattern(${p.id})">🗑</button>
+        </div>
+      </div>
+      <div class="card-body">${contentCell(p.content)}</div>
+    </div>`;
+  }
+
+  /* ── Save Pattern ── */
+  function setPatternError(msg) {
+    const el = document.getElementById('patternSaveError');
+    if (!el) return;
+    if (msg) { el.textContent = msg; el.style.display = ''; }
+    else      { el.textContent = '';  el.style.display = 'none'; }
+  }
+
+  function _doResetForm() {
+    document.getElementById('patternName').value = '';
+    if (quillForm) quillForm.setContents([]);
+    setPatternError('');
+    closeNewPattern();
+  }
+
+  function clearPatternForm() {
+    const name    = document.getElementById('patternName').value.trim();
+    const content = quillForm ? quillForm.root.innerHTML.trim() : '';
+    const isDirty = name !== '' || (content !== '' && content !== '<p><br></p>');
+    if (isDirty) {
+      showConfirm('確定要取消嗎？輸入嘅內容會消失。', _doResetForm);
+    } else {
+      _doResetForm();
+    }
+  }
+
+  async function savePattern() {
+    const name = document.getElementById('patternName').value.trim();
+    const type = document.getElementById('patternType').value;
+    const btn  = document.getElementById('savePatternBtn');
+
+    setPatternError('');
+    if (!name) { showToast('請填寫 Pattern 名稱','error'); return; }
+    btn.disabled = true; btn.textContent = '處理中…';
+
+    const content = await processEditorContent(getQuillForm());
+    const hasContent = content && content.trim() !== '' && content.trim() !== '<p><br></p>';
+    if (!hasContent) {
+      showToast('請輸入內容（文字或圖片皆可）','error');
+      btn.disabled=false; btn.textContent='💾 儲存 Pattern';
+      return;
+    }
+
+    let res, json;
+    try {
+      res  = await fetch('/api/pattern/save', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ name, pattern_type: type, content }),
+      });
+      json = await res.json();
+    } catch(e) {
+      showToast('網路錯誤，請稍後再試','error');
+      setPatternError(String(e));
+      btn.disabled=false; btn.textContent='💾 儲存 Pattern';
+      return;
+    }
+
+    if (res.ok) {
+      showToast('✅ 儲存成功');
+      _doResetForm();   // clears form AND closes modal
+      if (activePatternType === type) loadPatterns(type, activeSidebarBtn);
+    } else {
+      const errMsg = json.error || '儲存失敗';
+      const detail = json.detail ? `【詳細】${json.detail}` : '';
+      showToast(errMsg, 'error');
+      setPatternError(detail || errMsg);
+      console.error('Pattern save error:', json);
+    }
+    btn.disabled=false; btn.textContent='💾 儲存 Pattern';
+  }
+
+  /* ── Edit Pattern ── */
+  function openEditPattern(id) {
+    const p = patternCache[id]; if (!p) return;
+    const q = getQuillEditP();
+    document.getElementById('editPatternId').value   = p.id;
+    document.getElementById('editPatternName').value = p.name || '';
+    document.getElementById('editPatternType').value = p.pattern_type || '上升';
+    const c = p.content || '';
+    q.root.innerHTML = /<[a-zA-Z]/.test(c) ? c : '';
+    if (!/<[a-zA-Z]/.test(c)) q.setText(c);
+    document.getElementById('editPatternBackdrop').classList.add('open');
+    setTimeout(() => q.focus(), 80);
+  }
+  function closeEditPattern() {
+    document.getElementById('editPatternBackdrop').classList.remove('open');
+  }
+  function closeEditPatternIfOutside(e) {
+    if (e.target === document.getElementById('editPatternBackdrop')) closeEditPattern();
+  }
+
+  async function saveEditPattern() {
+    const id   = document.getElementById('editPatternId').value;
+    const name = document.getElementById('editPatternName').value.trim();
+    const type = document.getElementById('editPatternType').value;
+    if (!name) { showToast('名稱不能為空','error'); return; }
+
+    const btn = document.getElementById('editPatternSaveBtn');
+    btn.disabled = true; btn.textContent = '處理中…';
+
+    const content = await processEditorContent(getQuillEditP());
+    const hasContent = content && content.trim() !== '' && content.trim() !== '<p><br></p>';
+    if (!hasContent) {
+      showToast('請輸入內容（文字或圖片皆可）','error');
+      btn.disabled=false; btn.textContent='💾 儲存修改';
+      return;
+    }
+
+    let res, json;
+    try {
+      res  = await fetch(`/api/pattern/update/${id}`, {
+        method:'PATCH', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ name, pattern_type: type, content }),
+      });
+      json = await res.json();
+    } catch(e) {
+      showToast('網路錯誤','error'); btn.disabled=false; btn.textContent='💾 儲存修改'; return;
+    }
+
+    if (res.ok) {
+      showToast('✅ 更新成功');
+      closeEditPattern();
+      if (activePatternType) loadPatterns(activePatternType, activeSidebarBtn);
+    } else {
+      const detail = json.detail ? `\n【詳細】${json.detail}` : '';
+      showToast(json.error || '更新失敗', 'error');
+      console.error('Pattern update error:', json);
+      alert(`更新失敗：${json.error || ''}${detail}`);
+    }
+    btn.disabled=false; btn.textContent='💾 儲存修改';
+  }
+
+  /* ── Delete Pattern ── */
+  function deletePattern(id) {
+    console.log('[deletePattern] called with id =', id, typeof id);
+    const p  = patternCache[id];
+    const nm = p ? `「${p.name}」` : `ID ${id}`;
+    showConfirm(`確定刪除 Pattern ${nm}？此動作無法復原。`, async () => {
+      console.log('[deletePattern] confirm callback fired, fetching DELETE /api/pattern/delete/' + id);
+      let res, json;
+      try {
+        res  = await fetch(`/api/pattern/delete/${id}`, { method: 'DELETE' });
+        json = await res.json();
+      } catch (e) {
+        showToast('網路錯誤，請稍後再試', 'error');
+        console.error('[deletePattern] network error:', e);
+        return;
+      }
+      console.log('[deletePattern] response', res.status, json);
+      if (res.ok) {
+        showToast('🗑 刪除成功');
+        document.getElementById(`pattern-${id}`)?.remove();
+        delete patternCache[id];
+        /* refresh the current pattern list */
+        if (activePatternType) {
+          setTimeout(() => loadPatterns(activePatternType, activeSidebarBtn), 400);
+        }
+      } else {
+        console.error(`[deletePattern] failed (HTTP ${res.status}):`, json);
+        showToast(json.error || '刪除失敗', 'error');
+        alert(`刪除失敗：${json.error || ''}\n\n詳細：${json.detail || '(無詳細)'}`);
+      }
+    });
+  }
+
+  /* ── ESC ── */
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { closeEditPattern(); closeNewPattern(); }
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+{% block title %}股票分析系統{% endblock %}
+
+{% block styles %}
+  body { overflow: auto; }
+
+  .landing {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2.5rem;
+    padding: 2rem;
+    background: radial-gradient(ellipse at 30% 40%, #0f2a4a44 0%, transparent 60%),
+                radial-gradient(ellipse at 70% 60%, #2d1b5e33 0%, transparent 55%),
+                var(--bg0);
+  }
+
+  .landing-brand {
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: .6rem;
+  }
+
+  .landing-icon { font-size: 3rem; line-height: 1; }
+
+  .landing-title {
+    font-size: 2rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    letter-spacing: -.02em;
+  }
+
+  .landing-sub { font-size: .9rem; color: var(--muted); }
+
+  .landing-cards {
+    display: flex;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .landing-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: .8rem;
+    width: 240px;
+    padding: 2.2rem 1.5rem;
+    background: var(--bg3);
+    border: 1px solid var(--border2);
+    border-radius: 16px;
+    text-decoration: none;
+    color: var(--text2);
+    cursor: pointer;
+    transition: transform .2s, border-color .2s, box-shadow .2s, background .2s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .landing-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, var(--accent)08, transparent);
+    opacity: 0;
+    transition: opacity .25s;
+  }
+
+  .landing-card:hover {
+    transform: translateY(-4px);
+    border-color: var(--accent);
+    box-shadow: 0 8px 32px #38bdf81a;
+    background: var(--bg4);
+  }
+
+  .landing-card:hover::before { opacity: 1; }
+
+  .landing-card-icon { font-size: 2.4rem; line-height: 1; }
+
+  .landing-card-label {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text1);
+    text-align: center;
+  }
+
+  .landing-card-desc {
+    font-size: .78rem;
+    color: var(--muted);
+    text-align: center;
+    line-height: 1.4;
+  }
+
+  .landing-card-arrow {
+    font-size: .8rem;
+    color: var(--accent);
+    margin-top: .4rem;
+    opacity: 0;
+    transform: translateX(-4px);
+    transition: opacity .2s, transform .2s;
+  }
+
+  .landing-card:hover .landing-card-arrow {
+    opacity: 1;
+    transform: translateX(0);
+  }
+{% endblock %}
+
+{% block content %}
+<div class="landing">
+  <div class="landing-brand">
+    <div class="landing-icon">📈</div>
+    <h1 class="landing-title">股票分析系統</h1>
+    <p class="landing-sub">選擇功能開始</p>
+  </div>
+
+  <div class="landing-cards">
+    <a href="/notes" class="landing-card">
+      <div class="landing-card-icon">📝</div>
+      <div class="landing-card-label">股票預測筆記</div>
+      <div class="landing-card-desc">記錄預測、管理 Ticker<br>支援圖文混排</div>
+      <div class="landing-card-arrow">進入 →</div>
+    </a>
+    <a href="/patterns" class="landing-card">
+      <div class="landing-card-icon">📊</div>
+      <div class="landing-card-label">上升下跌 Pattern</div>
+      <div class="landing-card-desc">管理圖表形態<br>間隔複習智能測驗</div>
+      <div class="landing-card-arrow">進入 →</div>
+    </a>
+  </div>
+</div>
+{% endblock %}
