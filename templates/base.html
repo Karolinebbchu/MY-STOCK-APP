@@ -70,12 +70,45 @@
 
     .sidebar {
       width: 210px;
+      min-width: 210px;
       flex-shrink: 0;
       background: var(--bg3);
       border-right: 1px solid var(--border2);
       display: flex;
       flex-direction: column;
       overflow: hidden;
+      transition: width .28s cubic-bezier(.4,0,.2,1),
+                  min-width .28s cubic-bezier(.4,0,.2,1),
+                  border-color .28s;
+    }
+    .sidebar.sidebar--hidden {
+      width: 0 !important;
+      min-width: 0 !important;
+      border-right-color: transparent;
+    }
+
+    /* ── Sidebar toggle button ── */
+    .btn-sidebar-toggle {
+      background: transparent;
+      border: 1px solid var(--border2);
+      color: var(--text3);
+      border-radius: 6px;
+      width: 2rem;
+      height: 2rem;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 1rem;
+      flex-shrink: 0;
+      transition: background .15s, color .15s, border-color .15s;
+      line-height: 1;
+      padding: 0;
+    }
+    .btn-sidebar-toggle:hover { background: var(--bg5); color: var(--text1); border-color: var(--accent); }
+
+    @media (max-width: 700px) {
+      .sidebar { width: 0; min-width: 0; border-right-color: transparent; }
     }
 
     .sidebar-header {
@@ -425,6 +458,23 @@
 
 <script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
 <script>
+/* ════════════════ Sidebar toggle ════════════════ */
+function toggleSidebar() {
+  const sidebar = document.querySelector('.sidebar');
+  if (!sidebar) return;
+  const hidden = sidebar.classList.toggle('sidebar--hidden');
+  localStorage.setItem('sidebarHidden', hidden ? '1' : '0');
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  const sidebar = document.querySelector('.sidebar');
+  if (!sidebar) return;
+  const stored = localStorage.getItem('sidebarHidden');
+  const isMobile = window.innerWidth <= 700;
+  const shouldHide = stored !== null ? stored === '1' : isMobile;
+  if (shouldHide) sidebar.classList.add('sidebar--hidden');
+});
+
 /* ════════════════ Common utilities ════════════════ */
 
 function showToast(msg, type = 'success') {
