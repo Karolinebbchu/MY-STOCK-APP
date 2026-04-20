@@ -277,9 +277,10 @@
     textarea { resize: vertical; min-height: 80px; }
 
     /* ── Quill dark theme ── */
-    .ql-wrapper { border-radius: 8px; overflow: hidden; }
+    .ql-wrapper { border-radius: 8px; }
 
     .ql-toolbar.ql-snow {
+      position: sticky; top: 0; z-index: 100;
       background: #0d1e36; border: 1px solid var(--border2);
       border-bottom: 1px solid #1e3a5f; border-radius: 8px 8px 0 0;
       padding: 5px 8px;
@@ -669,14 +670,18 @@ function createQuill(containerId, placeholder) {
 function setupImageHandlers(q) {
   q.getModule('toolbar').addHandler('image', () => {
     const inp = document.createElement('input');
-    inp.type = 'file'; inp.accept = 'image/*';
+    inp.type = 'file'; inp.accept = 'image/*'; inp.multiple = true;
     inp.onchange = async () => {
-      const file = inp.files[0]; if (!file) return;
-      const idx = (q.getSelection(true) || { index: q.getLength() }).index;
-      activeUploads++; showUploadChip(true);
-      try { const url = await uploadToServer(file, file.name); q.insertEmbed(idx, 'image', url, Quill.sources.USER); q.setSelection(idx+1, Quill.sources.SILENT); }
-      catch { showToast('圖片上傳失敗', 'error'); }
-      finally { activeUploads--; if (activeUploads <= 0) { activeUploads = 0; showUploadChip(false); } }
+      const files = Array.from(inp.files || []);
+      if (!files.length) return;
+      let idx = (q.getSelection(true) || { index: q.getLength() }).index;
+      for (const file of files) {
+        activeUploads++; showUploadChip(true);
+        try { const url = await uploadToServer(file, file.name); q.insertEmbed(idx, 'image', url, Quill.sources.USER); idx++; }
+        catch { showToast('圖片上傳失敗', 'error'); }
+        finally { activeUploads--; if (activeUploads <= 0) { activeUploads = 0; showUploadChip(false); } }
+      }
+      q.setSelection(idx, Quill.sources.SILENT);
     };
     inp.click();
   });
