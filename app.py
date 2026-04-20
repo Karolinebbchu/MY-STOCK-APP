@@ -4,7 +4,7 @@ from pathlib import Path
 import requests
 import resend
 from apscheduler.schedulers.background import BackgroundScheduler
-from flask import Flask, request, jsonify, render_template, send_from_directory, abort
+from flask import Flask, request, jsonify, render_template, send_from_directory, abort, Response
 from dotenv import load_dotenv
 
 _APP_DIR = Path(__file__).resolve().parent
@@ -558,6 +558,168 @@ def delete_pattern(row_id):
 
     print(f"[DELETE PATTERN]   ✓ Deleted {len(deleted)} row(s)")
     return jsonify({"message": "刪除成功"}), 200
+
+
+@app.route("/api/pattern/export")
+def pattern_export():
+    """下載 Pattern-only JSON 備份檔（瀏覽器直接儲存）。"""
+    try:
+        patterns = _fetch_all_table(PATTERNS_BASE, "id.asc")
+    except RuntimeError as e:
+        return jsonify({"error": str(e)}), 500
+
+    payload = {
+        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "stock_patterns": patterns,
+    }
+    raw_json = json.dumps(payload, ensure_ascii=False, indent=2)
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    filename = f"patterns_backup_{ts}.json"
+    return Response(
+        raw_json,
+        mimetype="application/json",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@app.route("/api/pattern/import", methods=["POST"])
+def pattern_import():
+    """
+    Pattern 專用匯入。
+    - 支援 multipart/form-data (欄位 file + overwrite=0|1)
+    - 或 application/json body {"stock_patterns":[…], "overwrite": true}
+    - overwrite=true 時：重複 (name, category) 改為 PATCH 覆蓋；否則略過。
+    """
+    overwrite = False
+    raw = None
+
+    ct = (request.content_type or "").lower()
+    if "multipart/form-data" in ct:
+        f = request.files.get("file")
+        if not f or not f.filename:
+            return jsonify({"error": "請選擇 JSON 備份檔"}), 400
+        try:
+            raw = json.loads(f.read().decode("utf-8"))
+        except json.JSONDecodeError as e:
+            return jsonify({"error": f"檔案唔係有效 JSON：{e}"}), 400
+        except UnicodeDecodeError as e:
+            return jsonify({"error": f"檔案編碼無法讀取：{e}"}), 400
+        overwrite = request.form.get("overwrite", "0") in ("1", "true", "yes")
+    else:
+        raw = request.get_json(silent=True)
+        if raw is None:
+            return jsonify({"error": "請提供 JSON body，或使用 multipart 上傳欄位 file"}), 400
+        if isinstance(raw, dict):
+            overwrite = bool(raw.get("overwrite", False))
+
+    # ── 1. 提取 pattern 列 ──
+    patterns_raw = []
+    if isinstance(raw, list):
+        patterns_raw = raw
+    elif isinstance(raw, dict):
+        for k in ("stock_patterns", "patterns"):
+            if isinstance(raw.get(k), list):
+                patterns_raw = raw[k]
+                break
+
+    if not patterns_raw:
+        return jsonify({"error": "找不到 Pattern 資料。請確認 JSON 包含 stock_patterns 或 patterns 陣列。"}), 400
+
+    # ── 2. 規範化欄位 ──
+    patterns_clean = []
+    for i, row in enumerate(patterns_raw):
+        orig_id = row.get("id", "?")
+        cleaned, warns = _normalize_row(row, PATTERN_FIELD_ALIASES, PATTERN_IMPORT_KEYS)
+        if cleaned is None:
+            print(f"  [skip] pattern[{i}] orig_id={orig_id}: {warns}"); continue
+        if not cleaned.get("name") or not cleaned.get("content"):
+            print(f"  [skip] pattern[{i}] orig_id={orig_id}: 缺少必填欄位 name/content"); continue
+        # 由 category 自動衍生 pattern_type
+        cleaned["pattern_type"] = _pattern_type_from_category(cleaned.get("category", ""))
+        patterns_clean.append(cleaned)
+
+    if not patterns_clean:
+        return jsonify({"error": "沒有有效的 Pattern 資料可匯入"}), 400
+
+    # ── 3. 取出現有 (name, category) → id 對照表 ──
+    existing_map = {}
+    try:
+        resp = requests.get(
+            PATTERNS_BASE,
+            params={"select": "id,name,category", "limit": "10000"},
+            headers=SERVICE_HEADERS, timeout=15,
+        )
+        if resp.status_code == 200:
+            for r in resp.json() or []:
+                key = (
+                    str(r.get("name") or "").strip(),
+                    str(r.get("category") or "").strip(),
+                )
+                existing_map[key] = r.get("id")
+    except Exception as e:
+        print(f"  [warn] 無法取得現有 patterns：{e}")
+
+    new_rows, dup_rows = [], []
+    for row in patterns_clean:
+        key = (str(row.get("name") or "").strip(), str(row.get("category") or "").strip())
+        if key in existing_map:
+            row["_existing_id"] = existing_map[key]
+            dup_rows.append(row)
+        else:
+            new_rows.append(row)
+
+    print(f"[pattern import] 新增 {len(new_rows)} 筆，重複 {len(dup_rows)} 筆，overwrite={overwrite}")
+
+    # ── 4. INSERT 新資料 ──
+    inserted = skipped = overwritten = 0
+    errors = []
+
+    if new_rows:
+        ok, errs = _insert_rows_verbose(PATTERNS_BASE, new_rows, "pattern")
+        inserted = ok
+        errors.extend(errs)
+
+    # ── 5. 處理重複 ──
+    for row in dup_rows:
+        existing_id = row.pop("_existing_id", None)
+        if not overwrite:
+            skipped += 1
+            print(f"  [skip dup] pattern [{row.get('name')}]")
+            continue
+        if not existing_id:
+            skipped += 1; continue
+        row_clean = _strip_id(row)
+        try:
+            r = requests.patch(
+                f"{PATTERNS_BASE}?id=eq.{existing_id}",
+                json=row_clean,
+                headers={**SERVICE_HEADERS, "Prefer": "return=minimal"},
+                timeout=15,
+            )
+            if r.status_code in (200, 204):
+                overwritten += 1
+                print(f"  [overwrite] pattern [{row.get('name')}] id={existing_id}")
+            else:
+                errors.append(f"覆蓋失敗 [{row.get('name')}]: HTTP {r.status_code}")
+        except Exception as e:
+            errors.append(f"覆蓋異常 [{row.get('name')}]: {e}")
+
+    msg = (
+        f"匯入完成：新增 {inserted} 筆"
+        + (f"、覆蓋 {overwritten} 筆" if overwritten else "")
+        + (f"、略過重複 {skipped} 筆" if skipped else "")
+        + (f" | ⚠️ {len(errors)} 筆失敗，詳見 Terminal" if errors else "")
+    )
+    return jsonify({
+        "message": msg,
+        "imported": {
+            "inserted": inserted,
+            "overwritten": overwritten,
+            "skipped": skipped,
+            "errors": len(errors),
+            "error_details": errors[:10],
+        },
+    }), 200
 
 
 # ── Quiz ─────────────────────────────────────────────────

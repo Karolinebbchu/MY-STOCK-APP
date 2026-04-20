@@ -38,6 +38,35 @@
   }
   .pattern-cat-input { width: 100%; box-sizing: border-box; }
 
+  /* ── Sidebar backup strip ── */
+  .sidebar-backup {
+    flex-shrink: 0;
+    border-top: 1px solid var(--border2);
+    padding: .5rem .45rem .65rem;
+    display: flex; flex-direction: column; gap: .35rem;
+    background: var(--bg3);
+  }
+  .sidebar-backup .sidebar-nav-btn {
+    font-size: .78rem; padding: .5rem .65rem;
+    white-space: normal; line-height: 1.25;
+  }
+
+  /* ── Pattern import modal ── */
+  #patternImportBackdrop .modal { width: min(600px, 94vw); max-height: 88vh; }
+  #patternImportError {
+    display: none; color: #fca5a5; font-size: .82rem;
+    background: #7f1d1d44; border: 1px solid #b91c1c;
+    border-radius: 7px; padding: .5rem 1rem; word-break: break-word;
+  }
+  .import-file-hint { font-size: .75rem; color: var(--muted); }
+  .import-dup-choice { display: flex; flex-direction: column; gap: .45rem; }
+  .import-dup-choice label {
+    display: flex; align-items: flex-start; gap: .5rem;
+    font-size: .88rem; color: var(--text2); cursor: pointer;
+  }
+  .import-dup-choice input[type="radio"] { margin-top: .15rem; flex-shrink: 0; accent-color: var(--accent); }
+  .import-dup-choice small { display: block; font-size: .73rem; color: var(--muted); margin-top: .1rem; }
+
   /* Tall editors */
   #patternFormEditor .ql-editor {
     min-height: 500px; max-height: 58vh;
@@ -120,6 +149,11 @@
       </div>
       <div style="flex:1;min-height:1rem;"></div>
       <a href="/quiz" class="sidebar-nav-btn btn-quiz">🧠 進入測驗</a>
+      <div class="sidebar-backup">
+        <button type="button" class="sidebar-nav-btn" id="btnPatternBackupSend">🚀 立即備份 Email</button>
+        <button type="button" class="sidebar-nav-btn" id="btnPatternImport">📥 匯入備份檔</button>
+        <a href="/api/pattern/export" class="sidebar-nav-btn" download>💾 下載備份 JSON</a>
+      </div>
     </div>
   </aside>
 
@@ -160,6 +194,38 @@
       <button class="btn btn-primary" id="savePatternBtn" onclick="savePattern()">💾 儲存 Pattern</button>
     </div>
     <div id="patternSaveError" style="display:none;color:#fca5a5;font-size:.82rem;background:#7f1d1d44;border:1px solid #b91c1c;border-radius:7px;padding:.5rem 1rem;word-break:break-word;margin-top:-.4rem;"></div>
+  </div>
+</div>
+
+<!-- ── Pattern Import Modal ── -->
+<div class="modal-backdrop" id="patternImportBackdrop">
+  <div class="modal">
+    <h3>📥 匯入 Pattern 備份</h3>
+    <div class="modal-grid">
+      <div class="form-group full">
+        <label>備份檔（JSON）</label>
+        <input type="file" id="patternImportFile" accept=".json,application/json" />
+        <span class="import-file-hint">支援 Pattern 專用備份 <code>patterns_backup_*.json</code> 或完整備份 <code>stock_backup_*.json</code>。</span>
+      </div>
+      <div class="form-group full">
+        <label>遇到重複的 Pattern 時</label>
+        <div class="import-dup-choice">
+          <label>
+            <input type="radio" name="patternDupMode" value="skip" checked />
+            <span>略過<small>已存在的 Pattern 保持不變</small></span>
+          </label>
+          <label>
+            <input type="radio" name="patternDupMode" value="overwrite" />
+            <span>覆蓋<small>以備份檔內容取代現有資料（包含圖片連結）</small></span>
+          </label>
+        </div>
+      </div>
+    </div>
+    <div id="patternImportError"></div>
+    <div class="modal-actions" style="justify-content:center;gap:.8rem;padding-top:.4rem;">
+      <button class="btn btn-ghost"   id="btnPatternImportClose">✕ 取消</button>
+      <button class="btn btn-primary" id="btnPatternImportSubmit">💾 匯入還原</button>
+    </div>
   </div>
 </div>
 
@@ -582,7 +648,85 @@
 
   // ── ESC ──
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { closeEditPattern(); closeNewPattern(); }
+    if (e.key === 'Escape') { closeEditPattern(); closeNewPattern(); closePatternImport(); }
+  });
+
+  // ── Backup: send email (reuse shared /api/backup/send) ──
+  document.getElementById('btnPatternBackupSend').addEventListener('click', async () => {
+    const btn = document.getElementById('btnPatternBackupSend');
+    btn.disabled = true; btn.textContent = '寄送中…';
+    try {
+      const res  = await fetch('/api/backup/send', { method: 'POST' });
+      const json = await res.json();
+      if (res.ok) showToast('✅ 備份 Email 已寄出');
+      else        showToast(json.error || '備份失敗', 'error');
+    } catch { showToast('網路錯誤', 'error'); }
+    btn.disabled = false; btn.textContent = '🚀 立即備份 Email';
+  });
+
+  // ── Import modal ──
+  function openPatternImport() {
+    document.getElementById('patternImportFile').value = '';
+    document.getElementById('patternImportError').style.display = 'none';
+    document.getElementById('patternImportError').textContent = '';
+    document.querySelector('input[name="patternDupMode"][value="skip"]').checked = true;
+    document.getElementById('patternImportBackdrop').classList.add('open');
+  }
+  function closePatternImport() {
+    document.getElementById('patternImportBackdrop').classList.remove('open');
+  }
+
+  document.getElementById('btnPatternImport').addEventListener('click', openPatternImport);
+  document.getElementById('btnPatternImportClose').addEventListener('click', closePatternImport);
+  document.getElementById('patternImportBackdrop').addEventListener('click', e => {
+    if (e.target === document.getElementById('patternImportBackdrop')) closePatternImport();
+  });
+
+  document.getElementById('btnPatternImportSubmit').addEventListener('click', async () => {
+    const errEl = document.getElementById('patternImportError');
+    const btn   = document.getElementById('btnPatternImportSubmit');
+    const fileIn = document.getElementById('patternImportFile');
+    const overwrite = document.querySelector('input[name="patternDupMode"]:checked')?.value === 'overwrite';
+
+    errEl.style.display = 'none'; errEl.textContent = '';
+
+    if (!fileIn.files.length) {
+      errEl.textContent = '請先選擇備份 JSON 檔案。';
+      errEl.style.display = ''; return;
+    }
+
+    btn.disabled = true; btn.textContent = '匯入中…';
+
+    const fd = new FormData();
+    fd.append('file', fileIn.files[0]);
+    fd.append('overwrite', overwrite ? '1' : '0');
+
+    let res, json;
+    try {
+      res  = await fetch('/api/pattern/import', { method: 'POST', body: fd });
+      json = await res.json();
+    } catch (e) {
+      btn.disabled = false; btn.textContent = '💾 匯入還原';
+      errEl.textContent = '網路錯誤：' + String(e);
+      errEl.style.display = ''; return;
+    }
+
+    if (res.ok) {
+      const imp = json.imported || {};
+      const parts = [];
+      if (imp.inserted)   parts.push(`新增 ${imp.inserted} 筆`);
+      if (imp.overwritten) parts.push(`覆蓋 ${imp.overwritten} 筆`);
+      if (imp.skipped)     parts.push(`略過重複 ${imp.skipped} 筆`);
+      if (imp.errors)      parts.push(`⚠️ ${imp.errors} 筆失敗`);
+      showToast('✅ ' + (parts.length ? parts.join('、') : '匯入完成'));
+      closePatternImport();
+      await loadAllPatterns();
+      if (activeCategory) renderCategoryCards(activeCategory);
+    } else {
+      errEl.textContent = json.error || '匯入失敗';
+      errEl.style.display = '';
+    }
+    btn.disabled = false; btn.textContent = '💾 匯入還原';
   });
 
   // ── Init ──
