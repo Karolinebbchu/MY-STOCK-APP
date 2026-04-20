@@ -304,17 +304,34 @@
       const isOpen = cat === activeCategory;
       return `<div class="cat-accordion">
         <button class="cat-accordion-btn${isOpen ? ' open' : ''}"
-                data-cat="${esc(cat)}"
-                onclick="toggleCategory(${JSON.stringify(cat)}, this)"
+                data-cat-key="${encodeURIComponent(cat)}"
                 aria-expanded="${isOpen}">
           <span class="cat-label-text">📁 ${esc(cat)}</span>
           <span class="cat-count">${count}</span>
         </button>
       </div>`;
     }).join('');
+
+    // Attach click listeners after innerHTML (avoids quote-escaping bugs in inline onclick)
+    container.querySelectorAll('.cat-accordion-btn').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();   // prevent mobile overlay from closing the sidebar
+        const cat = decodeURIComponent(btn.dataset.catKey || '');
+        if (!cat) return;
+        _activateCategoryBtn(cat, btn);
+      });
+      // Touch fallback for iOS: also handle touchend to ensure responsiveness
+      btn.addEventListener('touchend', e => {
+        e.preventDefault();
+        e.stopPropagation();
+        const cat = decodeURIComponent(btn.dataset.catKey || '');
+        if (!cat) return;
+        _activateCategoryBtn(cat, btn);
+      }, { passive: false });
+    });
   }
 
-  function toggleCategory(cat, btn) {
+  function _activateCategoryBtn(cat, btn) {
     const isActive = btn.classList.contains('open');
 
     // Deactivate all
@@ -457,13 +474,11 @@
       await loadAllPatterns();
       activeCategory = category;
       renderCategoryCards(category);
-      // Open the accordion for the new category
+      // Highlight the active category button (renderSidebarAccordion already set it via activeCategory)
       document.querySelectorAll('.cat-accordion-btn').forEach(b => {
-        if (b.dataset.cat === category && !b.classList.contains('open')) {
-          b.classList.add('open');
-          b.setAttribute('aria-expanded', 'true');
-          b.nextElementSibling?.classList.add('open');
-        }
+        const bc = decodeURIComponent(b.dataset.catKey || '');
+        b.classList.toggle('open', bc === category);
+        b.setAttribute('aria-expanded', String(bc === category));
       });
     } else {
       const errMsg = json.error || '儲存失敗';
