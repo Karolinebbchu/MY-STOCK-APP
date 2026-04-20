@@ -177,7 +177,7 @@ NOTE_IMPORT_KEYS = frozenset(
     {"id", "symbol", "category", "date", "content", "source", "image_url"}
 )
 PATTERN_IMPORT_KEYS = frozenset(
-    {"id", "name", "pattern_type", "content", "next_review_date", "image_url", "created_at"}
+    {"id", "name", "pattern_type", "category", "content", "next_review_date", "image_url", "created_at"}
 )
 UPSERT_CHUNK = 80
 
@@ -424,16 +424,30 @@ def get_tickers():
 
 # ── Patterns CRUD ────────────────────────────────────────
 
+@app.route("/api/patterns")
+def get_all_patterns():
+    resp = requests.get(
+        PATTERNS_BASE,
+        params={"order": "category.asc,created_at.desc"},
+        headers=HEADERS,
+    )
+    if resp.status_code != 200:
+        return jsonify({"error": "查詢失敗"}), 500
+    return jsonify({"patterns": resp.json() or []}), 200
+
+
 @app.route("/api/pattern/save", methods=["POST"])
 def save_pattern():
     data = request.get_json(silent=True) or {}
     name         = (data.get("name")         or "").strip()
     pattern_type = (data.get("pattern_type") or "").strip()
+    category     = (data.get("category")     or "").strip()
     content      = (data.get("content")      or "").strip()
 
     missing = []
     if not name:         missing.append("Pattern 名稱")
     if not pattern_type: missing.append("類型")
+    if not category:     missing.append("類別（庫）")
     if not content:      missing.append("內容")
     if missing:
         return jsonify({"error": f"以下欄位為必填：{', '.join(missing)}"}), 400
@@ -444,6 +458,7 @@ def save_pattern():
     payload = {
         "name": name,
         "pattern_type": pattern_type,
+        "category": category,
         "content": content,
         "next_review_date": today,
         "image_url": None,          # always send null; upload handled separately
@@ -487,6 +502,8 @@ def update_pattern(row_id):
         if pt not in PATTERN_TYPES:
             return jsonify({"error": "類型必須是「上升」、「下跌」或「教訓」"}), 400
         payload["pattern_type"] = pt
+    if data.get("category") is not None:
+        payload["category"] = (data.get("category") or "").strip() or None
     if data.get("content"):      payload["content"]      = data["content"].strip()
     if not payload:
         return jsonify({"error": "沒有可更新的欄位"}), 400
