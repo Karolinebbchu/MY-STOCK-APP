@@ -90,28 +90,6 @@
   }
   .cat-accordion-btn.open .cat-arrow { transform: rotate(180deg); color: var(--accent); }
 
-  .cat-accordion-body {
-    display: none; padding: .15rem 0 .3rem;
-    background: rgba(0,0,0,.15);
-  }
-  .cat-accordion-body.open { display: block; }
-
-  .cat-pattern-item {
-    padding: .44rem 1rem .44rem 2rem;
-    font-size: .81rem; color: var(--text3);
-    cursor: pointer;
-    border-left: 2px solid transparent;
-    transition: background .12s, color .12s, border-color .12s;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    -webkit-tap-highlight-color: transparent;
-    touch-action: manipulation;
-  }
-  .cat-pattern-item:hover { background: var(--bg2); color: var(--text2); }
-  .cat-pattern-item.active {
-    color: var(--accent); border-left-color: var(--accent);
-    background: rgba(99,102,241,.1);
-  }
-
   /* Highlight pulse on card */
   @keyframes card-pulse {
     0%,100% { outline-color: transparent; }
@@ -220,7 +198,6 @@
   let allPatterns    = [];
   let patternCache   = {};
   let activeCategory = null;   // currently displayed category in main pane
-  let activePatId    = null;   // highlighted pattern item in sidebar
 
   const UNCATEGORIZED = '未分類';
 
@@ -306,7 +283,7 @@
       if (getCategories().includes(activeCategory)) {
         renderCategoryCards(activeCategory);
       } else {
-        activeCategory = null; activePatId = null;
+        activeCategory = null;
         document.getElementById('patternsArea').innerHTML =
           '<p class="empty-msg" style="padding-top:4rem;">← 點擊左側類別查看 Pattern</p>';
       }
@@ -323,69 +300,34 @@
       return;
     }
     container.innerHTML = cats.map(cat => {
-      const patterns = getPatternsForCat(cat);
-      const isOpen   = cat === activeCategory;
-      const itemsHtml = patterns.map(p =>
-        `<div class="cat-pattern-item${activePatId === p.id ? ' active' : ''}"
-              onclick="selectPatternItem(${p.id}, this, ${JSON.stringify(cat)})">
-           ${esc(p.name)}
-         </div>`
-      ).join('');
+      const count  = getPatternsForCat(cat).length;
+      const isOpen = cat === activeCategory;
       return `<div class="cat-accordion">
         <button class="cat-accordion-btn${isOpen ? ' open' : ''}"
                 data-cat="${esc(cat)}"
                 onclick="toggleCategory(${JSON.stringify(cat)}, this)"
                 aria-expanded="${isOpen}">
           <span class="cat-label-text">📁 ${esc(cat)}</span>
-          <span class="cat-count">${patterns.length}</span>
-          <span class="cat-arrow">▼</span>
+          <span class="cat-count">${count}</span>
         </button>
-        <div class="cat-accordion-body${isOpen ? ' open' : ''}"
-             id="catbody-${encodeURIComponent(cat)}">
-          ${itemsHtml}
-        </div>
       </div>`;
     }).join('');
   }
 
   function toggleCategory(cat, btn) {
-    const body = document.getElementById('catbody-' + encodeURIComponent(cat));
-    if (!body) return;
-    const isOpen = btn.classList.contains('open');
+    const isActive = btn.classList.contains('open');
 
-    // Close all accordions
+    // Deactivate all
     document.querySelectorAll('.cat-accordion-btn.open').forEach(b => {
       b.classList.remove('open');
       b.setAttribute('aria-expanded', 'false');
     });
-    document.querySelectorAll('.cat-accordion-body.open').forEach(b => b.classList.remove('open'));
 
-    if (!isOpen) {
-      // Open this one and show its patterns
+    if (!isActive) {
       btn.classList.add('open');
       btn.setAttribute('aria-expanded', 'true');
-      body.classList.add('open');
       activeCategory = cat;
       renderCategoryCards(cat);
-    } else {
-      // Was open → closed; keep main area as-is
-    }
-  }
-
-  function selectPatternItem(id, el, cat) {
-    document.querySelectorAll('.cat-pattern-item.active').forEach(x => x.classList.remove('active'));
-    el.classList.add('active');
-    activePatId    = id;
-    activeCategory = cat;
-
-    const card = document.getElementById(`pattern-${id}`);
-    if (card) {
-      card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      card.classList.remove('highlight');
-      void card.offsetWidth; // reflow to restart animation
-      card.classList.add('highlight');
-    } else {
-      renderCategoryCards(cat, id);
     }
   }
 
