@@ -150,6 +150,15 @@ TABLE_NAME     = "stock_notes"
 PATTERNS_TABLE = "stock_patterns"
 PATTERN_TYPES  = ("上升", "下跌", "教訓")
 BUCKET_NAME    = "stock_images"
+
+
+def _pattern_type_from_category(category: str) -> str:
+    """將使用者輸入嘅類別名對應到 pattern_type（測驗／篩選用）。自訂名預設為「上升」。"""
+    c = (category or "").strip()
+    if c in PATTERN_TYPES:
+        return c
+    return "上升"
+
 REST_BASE      = f"{SUPABASE_URL}/rest/v1/{TABLE_NAME}"
 PATTERNS_BASE  = f"{SUPABASE_URL}/rest/v1/{PATTERNS_TABLE}"
 STORAGE_BASE   = f"{SUPABASE_URL}/storage/v1/object"
@@ -439,20 +448,18 @@ def get_all_patterns():
 @app.route("/api/pattern/save", methods=["POST"])
 def save_pattern():
     data = request.get_json(silent=True) or {}
-    name         = (data.get("name")         or "").strip()
-    pattern_type = (data.get("pattern_type") or "").strip()
-    category     = (data.get("category")     or "").strip()
-    content      = (data.get("content")      or "").strip()
+    name     = (data.get("name")     or "").strip()
+    category = (data.get("category") or "").strip()
+    content  = (data.get("content")  or "").strip()
 
     missing = []
-    if not name:         missing.append("Pattern 名稱")
-    if not pattern_type: missing.append("類型")
-    if not category:     missing.append("類別（庫）")
-    if not content:      missing.append("內容")
+    if not name:     missing.append("Pattern 名稱")
+    if not category: missing.append("類別")
+    if not content:  missing.append("內容")
     if missing:
         return jsonify({"error": f"以下欄位為必填：{', '.join(missing)}"}), 400
-    if pattern_type not in PATTERN_TYPES:
-        return jsonify({"error": "類型必須是「上升」、「下跌」或「教訓」"}), 400
+
+    pattern_type = _pattern_type_from_category(category)
 
     today = date.today().isoformat()
     payload = {
@@ -497,13 +504,17 @@ def update_pattern(row_id):
     data    = request.get_json(silent=True) or {}
     payload = {}
     if data.get("name"):         payload["name"]         = data["name"].strip()
-    if data.get("pattern_type") is not None:
+    if data.get("category") is not None:
+        cat = (data.get("category") or "").strip()
+        if not cat:
+            return jsonify({"error": "類別不可為空"}), 400
+        payload["category"] = cat
+        payload["pattern_type"] = _pattern_type_from_category(cat)
+    elif data.get("pattern_type") is not None:
         pt = (data.get("pattern_type") or "").strip()
         if pt not in PATTERN_TYPES:
             return jsonify({"error": "類型必須是「上升」、「下跌」或「教訓」"}), 400
         payload["pattern_type"] = pt
-    if data.get("category") is not None:
-        payload["category"] = (data.get("category") or "").strip() or None
     if data.get("content"):      payload["content"]      = data["content"].strip()
     if not payload:
         return jsonify({"error": "沒有可更新的欄位"}), 400

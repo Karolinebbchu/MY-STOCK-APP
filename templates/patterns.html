@@ -36,6 +36,7 @@
   #editPatternBackdrop input, #editPatternBackdrop select {
     font-size: .95rem; padding: .65rem .9rem;
   }
+  .pattern-cat-input { width: 100%; box-sizing: border-box; }
 
   /* Tall editors */
   #patternFormEditor .ql-editor {
@@ -111,10 +112,6 @@
     background: rgba(99,102,241,.1);
   }
 
-  /* Category field in modal */
-  .cat-field-wrap { display: flex; flex-direction: column; gap: .35rem; }
-  .cat-new-input  { margin-top: .1rem; }
-
   /* Highlight pulse on card */
   @keyframes card-pulse {
     0%,100% { outline-color: transparent; }
@@ -158,6 +155,8 @@
   </div>
 </div>
 
+<datalist id="patternCategoryDatalist"></datalist>
+
 <!-- ── New Pattern Modal ── -->
 <div class="modal-backdrop" id="newPatternBackdrop" onclick="closeNewPatternIfOutside(event)">
   <div class="modal">
@@ -167,25 +166,11 @@
         <label>Pattern 名稱</label>
         <input id="patternName" type="text" placeholder="例如：杯柄型態、頭肩頂…" autocomplete="off" />
       </div>
-      <div class="form-group">
-        <label>類型（用於測驗）</label>
-        <select id="patternType">
-          <option value="上升">📈 上升</option>
-          <option value="下跌">📉 下跌</option>
-          <option value="教訓">📚 教訓</option>
-        </select>
-      </div>
       <div class="form-group full">
-        <label>類別（庫）</label>
-        <div class="cat-field-wrap">
-          <select id="patternCategory"
-                  onchange="onCatSelectChange('patternCategory','patternCategoryNew')">
-            <option value="">— 選擇類別 —</option>
-            <option value="__new__">＋ 新增類別…</option>
-          </select>
-          <input id="patternCategoryNew" class="cat-new-input" type="text"
-                 placeholder="輸入新類別名稱" autocomplete="off" style="display:none;" />
-        </div>
+        <label>類別 <span style="color:var(--muted);font-weight:400;">（下拉揀現有分類，或直接輸入新名）</span></label>
+        <input id="patternCategoryInput" class="pattern-cat-input" type="text"
+               list="patternCategoryDatalist"
+               placeholder="例如：上升、下跌、教訓、見底庫…" autocomplete="off" />
       </div>
       <div class="form-group full">
         <label>內容 <span style="color:var(--muted);font-weight:400;">（Ctrl+V 貼圖 / 拖曳圖片）</span></label>
@@ -210,25 +195,11 @@
         <label>Pattern 名稱</label>
         <input id="editPatternName" type="text" autocomplete="off" />
       </div>
-      <div class="form-group">
-        <label>類型（用於測驗）</label>
-        <select id="editPatternType">
-          <option value="上升">📈 上升</option>
-          <option value="下跌">📉 下跌</option>
-          <option value="教訓">📚 教訓</option>
-        </select>
-      </div>
       <div class="form-group full">
-        <label>類別（庫）</label>
-        <div class="cat-field-wrap">
-          <select id="editPatternCategory"
-                  onchange="onCatSelectChange('editPatternCategory','editPatternCategoryNew')">
-            <option value="">— 選擇類別 —</option>
-            <option value="__new__">＋ 新增類別…</option>
-          </select>
-          <input id="editPatternCategoryNew" class="cat-new-input" type="text"
-                 placeholder="輸入新類別名稱" autocomplete="off" style="display:none;" />
-        </div>
+        <label>類別 <span style="color:var(--muted);font-weight:400;">（下拉揀現有分類，或直接輸入新名）</span></label>
+        <input id="editPatternCategoryInput" class="pattern-cat-input" type="text"
+               list="patternCategoryDatalist"
+               placeholder="例如：上升、下跌、教訓、見底庫…" autocomplete="off" />
       </div>
       <div class="form-group full">
         <label>內容</label>
@@ -292,51 +263,29 @@
     return allPatterns.filter(p => normCat(p) === cat);
   }
 
-  // ── Populate category <select> ──
-  function populateCategorySelect(selId, currentVal) {
-    const sel  = document.getElementById(selId);
-    const inpId = selId.replace('Category', 'CategoryNew');
-    const inp  = document.getElementById(inpId);
-    if (!sel) return;
-
-    const cats = getCategories().filter(c => c !== UNCATEGORIZED);
-    sel.innerHTML = '<option value="">— 選擇類別 —</option>';
-    for (const cat of cats) {
+  /** 預設建議 + 資料庫已有嘅類別，供 datalist 使用 */
+  function refreshCategoryDatalist() {
+    const dl = document.getElementById('patternCategoryDatalist');
+    if (!dl) return;
+    dl.replaceChildren();
+    const seeded = ['上升', '下跌', '教訓'];
+    const fromDb = getCategories().filter(c => c !== UNCATEGORIZED);
+    const seen = new Set();
+    for (const v of [...seeded, ...fromDb]) {
+      if (!v || seen.has(v)) continue;
+      seen.add(v);
       const opt = document.createElement('option');
-      opt.value = cat; opt.textContent = cat;
-      if (cat === currentVal) opt.selected = true;
-      sel.appendChild(opt);
-    }
-    const newOpt = document.createElement('option');
-    newOpt.value = '__new__'; newOpt.textContent = '＋ 新增類別…';
-    sel.appendChild(newOpt);
-
-    // If currentVal exists but not in list (edge case), pre-fill as new
-    if (currentVal && !cats.includes(currentVal) && currentVal !== UNCATEGORIZED) {
-      sel.value = '__new__';
-      if (inp) { inp.value = currentVal; inp.style.display = ''; }
-    } else if (inp) {
-      inp.style.display = 'none';
-      inp.value = '';
+      opt.value = v;
+      dl.appendChild(opt);
     }
   }
 
-  function onCatSelectChange(selId, inpId) {
-    const sel = document.getElementById(selId);
-    const inp = document.getElementById(inpId);
-    if (!inp) return;
-    if (sel.value === '__new__') { inp.style.display = ''; inp.focus(); }
-    else                         { inp.style.display = 'none'; inp.value = ''; }
-  }
-
-  function getSelectedCat(selId, inpId) {
-    const sel = document.getElementById(selId);
-    if (!sel) return '';
-    if (sel.value === '__new__') {
-      const inp = document.getElementById(inpId);
-      return inp ? inp.value.trim() : '';
-    }
-    return sel.value;
+  function categoryChipClass(p) {
+    const c = normCat(p);
+    if (c === '上升') return 'cat-rise';
+    if (c === '下跌') return 'cat-fall';
+    if (c === '教訓') return 'cat-lesson';
+    return 'cat-other';
   }
 
   // ── Load ALL patterns ──
@@ -351,6 +300,7 @@
     } catch {
       showToast('網路錯誤', 'error'); return;
     }
+    refreshCategoryDatalist();
     renderSidebarAccordion();
     if (activeCategory) {
       if (getCategories().includes(activeCategory)) {
@@ -469,15 +419,14 @@
   }
 
   function patternCardHtml(p) {
-    const typeClass = p.pattern_type === '上升' ? 'cat-rise'
-                    : p.pattern_type === '下跌' ? 'cat-fall'
-                    : 'cat-lesson';
+    const chipClass = categoryChipClass(p);
+    const catLabel  = normCat(p);
     const review = p.next_review_date || '';
     return `<div class="pattern-card" id="pattern-${p.id}">
       <div class="card-header">
         <div class="card-meta">
           <span class="card-name">${esc(p.name)}</span>
-          <span class="cat-label ${typeClass}">${esc(p.pattern_type)}</span>
+          <span class="cat-label ${chipClass}">${esc(catLabel)}</span>
           ${review ? `<span class="meta-date" style="font-size:.68rem;">複習: ${review}</span>` : ''}
         </div>
         <div class="action-btns">
@@ -492,13 +441,14 @@
   // ── New Pattern Modal ──
   function openNewPatternModal() {
     getQuillForm();
-    populateCategorySelect('patternCategory', activeCategory || '');
+    refreshCategoryDatalist();
+    const ci = document.getElementById('patternCategoryInput');
+    if (ci) ci.value = activeCategory && activeCategory !== UNCATEGORIZED ? activeCategory : '';
     document.getElementById('newPatternBackdrop').classList.add('open');
     setTimeout(() => getQuillForm().focus(), 80);
   }
   function closeNewPattern() {
     document.getElementById('newPatternBackdrop').classList.remove('open');
-    document.getElementById('patternCategoryNew').style.display = 'none';
   }
   function closeNewPatternIfOutside(e) {
     if (e.target === document.getElementById('newPatternBackdrop')) clearPatternForm();
@@ -512,9 +462,9 @@
   }
 
   function _doResetForm() {
-    document.getElementById('patternName').value      = '';
-    document.getElementById('patternCategoryNew').style.display = 'none';
-    document.getElementById('patternCategoryNew').value = '';
+    document.getElementById('patternName').value = '';
+    const ci = document.getElementById('patternCategoryInput');
+    if (ci) ci.value = '';
     if (quillForm) quillForm.setContents([]);
     setPatternError('');
     closeNewPattern();
@@ -522,21 +472,21 @@
 
   function clearPatternForm() {
     const name    = document.getElementById('patternName').value.trim();
+    const catIn   = document.getElementById('patternCategoryInput')?.value.trim() || '';
     const content = quillForm ? quillForm.root.innerHTML.trim() : '';
-    const isDirty = name !== '' || (content !== '' && content !== '<p><br></p>');
+    const isDirty = name !== '' || catIn !== '' || (content !== '' && content !== '<p><br></p>');
     if (isDirty) showConfirm('確定要取消嗎？輸入嘅內容會消失。', _doResetForm);
     else         _doResetForm();
   }
 
   async function savePattern() {
     const name     = document.getElementById('patternName').value.trim();
-    const type     = document.getElementById('patternType').value;
-    const category = getSelectedCat('patternCategory', 'patternCategoryNew');
+    const category = document.getElementById('patternCategoryInput').value.trim();
     const btn      = document.getElementById('savePatternBtn');
 
     setPatternError('');
     if (!name)     { showToast('請填寫 Pattern 名稱', 'error'); return; }
-    if (!category) { showToast('請選擇或輸入類別（庫）', 'error'); return; }
+    if (!category) { showToast('請輸入或揀選類別', 'error'); return; }
 
     btn.disabled = true; btn.textContent = '處理中…';
 
@@ -550,7 +500,7 @@
     try {
       res  = await fetch('/api/pattern/save', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, pattern_type: type, category, content }),
+        body: JSON.stringify({ name, category, content }),
       });
       json = await res.json();
     } catch (e) {
@@ -585,10 +535,14 @@
   function openEditPattern(id) {
     const p = patternCache[id]; if (!p) return;
     const q = getQuillEditP();
+    refreshCategoryDatalist();
     document.getElementById('editPatternId').value   = p.id;
     document.getElementById('editPatternName').value = p.name || '';
-    document.getElementById('editPatternType').value = p.pattern_type || '上升';
-    populateCategorySelect('editPatternCategory', normCat(p));
+    const ec = document.getElementById('editPatternCategoryInput');
+    if (ec) {
+      const nc = normCat(p);
+      ec.value = nc === UNCATEGORIZED ? '' : nc;
+    }
     const c = p.content || '';
     q.root.innerHTML = /<[a-zA-Z]/.test(c) ? c : '';
     if (!/<[a-zA-Z]/.test(c)) q.setText(c);
@@ -597,7 +551,6 @@
   }
   function closeEditPattern() {
     document.getElementById('editPatternBackdrop').classList.remove('open');
-    document.getElementById('editPatternCategoryNew').style.display = 'none';
   }
   function closeEditPatternIfOutside(e) {
     if (e.target === document.getElementById('editPatternBackdrop')) closeEditPattern();
@@ -606,10 +559,9 @@
   async function saveEditPattern() {
     const id       = document.getElementById('editPatternId').value;
     const name     = document.getElementById('editPatternName').value.trim();
-    const type     = document.getElementById('editPatternType').value;
-    const category = getSelectedCat('editPatternCategory', 'editPatternCategoryNew');
+    const category = document.getElementById('editPatternCategoryInput').value.trim();
     if (!name)     { showToast('名稱不能為空', 'error'); return; }
-    if (!category) { showToast('請選擇或輸入類別（庫）', 'error'); return; }
+    if (!category) { showToast('請輸入或揀選類別', 'error'); return; }
 
     const btn = document.getElementById('editPatternSaveBtn');
     btn.disabled = true; btn.textContent = '處理中…';
@@ -624,7 +576,7 @@
     try {
       res  = await fetch(`/api/pattern/update/${id}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, pattern_type: type, category, content }),
+        body: JSON.stringify({ name, category, content }),
       });
       json = await res.json();
     } catch {
