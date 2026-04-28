@@ -334,6 +334,44 @@ def save():
     return jsonify({"error": "儲存失敗", "detail": resp.text}), 500
 
 
+@app.route("/pin/<int:row_id>", methods=["PATCH"])
+def pin_note(row_id):
+    data = request.get_json() or {}
+    is_pinned = bool(data.get("is_pinned", False))
+    resp = requests.patch(
+        f"{REST_BASE}?id=eq.{row_id}",
+        json={"is_pinned": is_pinned},
+        headers={**SERVICE_HEADERS, "Prefer": "return=representation"},
+    )
+    if resp.status_code in (200, 204):
+        result = resp.json() if resp.text.strip() else []
+        return jsonify({"message": "更新成功", "data": result[0] if result else {}}), 200
+    return jsonify({"error": "更新失敗", "detail": resp.text}), 500
+
+
+@app.route("/api/reorder", methods=["POST"])
+def reorder_notes():
+    items = request.get_json() or []
+    if not isinstance(items, list):
+        return jsonify({"error": "請提供陣列格式"}), 400
+    errors = []
+    for item in items:
+        note_id = item.get("id")
+        sort_order = item.get("sort_order", 0)
+        if note_id is None:
+            continue
+        r = requests.patch(
+            f"{REST_BASE}?id=eq.{note_id}",
+            json={"sort_order": sort_order},
+            headers={**SERVICE_HEADERS, "Prefer": "return=minimal"},
+        )
+        if r.status_code not in (200, 204):
+            errors.append(f"note {note_id}: HTTP {r.status_code}")
+    if errors:
+        return jsonify({"error": "部分更新失敗", "details": errors}), 500
+    return jsonify({"message": "排序已更新"}), 200
+
+
 @app.route("/search")
 def search():
     symbol = request.args.get("symbol", "").strip().upper()
@@ -341,7 +379,7 @@ def search():
         return jsonify({"error": "請提供股票代號"}), 400
     resp = requests.get(
         REST_BASE,
-        params={"symbol": f"eq.{symbol}", "order": "date.desc"},
+        params={"symbol": f"eq.{symbol}", "order": "is_pinned.desc,sort_order.asc,date.desc"},
         headers=HEADERS,
     )
     if resp.status_code != 200:

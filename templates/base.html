@@ -331,6 +331,51 @@
     .btn-edit      { background: #1e3a5f; color: #7dd3fc; border: 1px solid #1d4ed8; padding: .3rem .65rem; font-size: .76rem; }
     .btn-sm        { padding: .3rem .65rem; font-size: .76rem; }
 
+    /* ── Pinned note card ── */
+    .note-card--pinned {
+      border-left-color: #fbbf24 !important;
+      background: linear-gradient(135deg, #1a150088 0%, var(--bg1) 60%);
+    }
+    .note-card--pinned:hover {
+      border-left-color: #fcd34d !important;
+      box-shadow: 0 2px 14px #fbbf2420;
+    }
+    .pin-badge {
+      font-size: .62rem; font-weight: 700;
+      background: #2a1f00; color: #fbbf24;
+      border: 1px solid #fbbf2466;
+      border-radius: 4px; padding: .04rem .38rem;
+      white-space: nowrap; letter-spacing: .02em;
+    }
+    .btn-pin {
+      background: transparent;
+      border: 1px solid var(--border2);
+      color: var(--muted);
+      padding: .28rem .48rem;
+      font-size: .78rem;
+      border-radius: 7px;
+      cursor: pointer;
+      line-height: 1;
+      transition: color .15s, border-color .15s, background .15s;
+      display: inline-flex; align-items: center; justify-content: center;
+    }
+    .btn-pin:hover  { color: #fbbf24; border-color: #fbbf2488; background: #2a1f0044; }
+    .btn-pin.pinned { color: #fbbf24; border-color: #fbbf24;   background: #2a1f0066; }
+    .btn-order {
+      background: transparent;
+      border: 1px solid var(--border2);
+      color: var(--muted);
+      padding: .28rem .42rem;
+      font-size: .68rem;
+      border-radius: 7px;
+      cursor: pointer;
+      line-height: 1;
+      transition: color .15s, border-color .15s, background .15s;
+      display: inline-flex; align-items: center; justify-content: center;
+    }
+    .btn-order:hover    { color: var(--text2); border-color: var(--accent); background: #1a2a42; }
+    .btn-order:disabled { opacity: .3; cursor: not-allowed; }
+
     /* ── Note cards ── */
     .note-card {
       background: var(--bg1);
@@ -715,12 +760,20 @@ function noteCardHtml(row, showCategory = false) {
     ? `<span class="cat-label ${catClass[row.category]||'cat-other'}">${esc(row.category)}</span>`
     : '';
   const src = row.source ? `<span class="meta-source">${esc(row.source)}</span>` : '';
-  return `<div class="note-card" id="row-${row.id}">
+  const isPinned = !!row.is_pinned;
+  const pinnedClass  = isPinned ? ' note-card--pinned' : '';
+  const pinBtnClass  = isPinned ? ' pinned' : '';
+  const pinTitle     = isPinned ? '取消置頂' : '置頂';
+  const pinBadge     = isPinned ? `<span class="pin-badge">📌 置頂</span>` : '';
+  return `<div class="note-card${pinnedClass}" id="row-${row.id}">
     <div class="card-header">
       <div class="card-meta">
-        <span class="meta-date">📅 ${esc(row.date)}</span>${catTag}${src}
+        ${pinBadge}<span class="meta-date">📅 ${esc(row.date)}</span>${catTag}${src}
       </div>
       <div class="action-btns">
+        <button class="btn-pin${pinBtnClass}" onclick="togglePin(${row.id})" title="${pinTitle}">📌</button>
+        <button class="btn-order" onclick="moveNote(${row.id},'up')"   title="向上移">▲</button>
+        <button class="btn-order" onclick="moveNote(${row.id},'down')" title="向下移">▼</button>
         <button class="btn btn-edit"   onclick="openEditNote(${row.id})">✏️</button>
         <button class="btn btn-danger" onclick="deleteNote(${row.id})">🗑</button>
       </div>

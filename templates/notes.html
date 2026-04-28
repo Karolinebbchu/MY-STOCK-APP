@@ -288,6 +288,8 @@
   }
 
   let activeTicker = null;
+  /* catOrder[cat] = { pinned: [id, …], unpinned: [id, …] } — built on each load */
+  let catOrder = {};
 
   async function selectTicker(symbol, el) {
     document.querySelectorAll('.ticker-item').forEach(x => x.classList.remove('active'));
@@ -308,7 +310,17 @@
 
     if (!total) {
       area.innerHTML = `<p class="empty-msg">「${esc(symbol)}」尚無筆記</p>`;
+      catOrder = {};
       return;
+    }
+
+    /* rebuild category order map */
+    catOrder = {};
+    for (const cat of cats) {
+      catOrder[cat] = { pinned: [], unpinned: [] };
+      for (const row of grouped[cat]) {
+        (row.is_pinned ? catOrder[cat].pinned : catOrder[cat].unpinned).push(row.id);
+      }
     }
 
     const catClass = { 'Prediction':'cat-prediction','Value Range':'cat-value-range' };
@@ -330,6 +342,64 @@
       html += `</div></div>`;
     }
     area.innerHTML = html;
+  }
+
+  /* ── Pin / Unpin ── */
+  async function togglePin(id) {
+    const row = rowCache[id];
+    if (!row) return;
+    const newPinned = !row.is_pinned;
+    const res = await fetch(`/pin/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ is_pinned: newPinned }),
+    });
+    const json = await res.json();
+    if (res.ok) {
+      showToast(newPinned ? '📌 已置頂' : '✅ 已取消置頂');
+      if (activeTicker) document.querySelector('.ticker-item.active')?.click?.();
+    } else {
+      showToast(json.error || '操作失敗', 'error');
+    }
+  }
+
+  /* ── Move up / down within same pin-group ── */
+  async function moveNote(id, direction) {
+    const row = rowCache[id];
+    if (!row) return;
+    const cat   = row.category;
+    const group = catOrder[cat];
+    if (!group) return;
+
+    const isPinned = !!row.is_pinned;
+    const arr = isPinned ? group.pinned : group.unpinned;
+    const idx = arr.indexOf(id);
+    if (idx === -1) return;
+
+    if (direction === 'up'   && idx === 0)              return;
+    if (direction === 'down' && idx === arr.length - 1) return;
+
+    const newArr  = [...arr];
+    const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+    [newArr[idx], newArr[swapIdx]] = [newArr[swapIdx], newArr[idx]];
+
+    /* pinned group uses 0-based; unpinned uses 10000-based to avoid overlap */
+    const base = isPinned ? 0 : 10000;
+    const reorderData = newArr.map((noteId, i) => ({ id: noteId, sort_order: base + i }));
+
+    const res = await fetch('/api/reorder', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(reorderData),
+    });
+    if (res.ok) {
+      /* update local cache optimistically then re-render */
+      reorderData.forEach(item => { if (rowCache[item.id]) rowCache[item.id].sort_order = item.sort_order; });
+      if (isPinned) group.pinned = newArr; else group.unpinned = newArr;
+      if (activeTicker) document.querySelector('.ticker-item.active')?.click?.();
+    } else {
+      showToast('排序更新失敗', 'error');
+    }
   }
 
   /* ── New Note Modal ── */
