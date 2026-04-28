@@ -194,6 +194,59 @@
     .ticker-item:hover  { background: var(--bg2); color: var(--text2); }
     .ticker-item.active { background: var(--bg2); color: var(--accent); border-left-color: var(--accent); font-weight: 600; }
 
+    /* ── Ticker item: pinned state ── */
+    .ticker-item--pinned {
+      color: #fbbf24;
+      background: linear-gradient(90deg, #2a1f0030 0%, transparent 100%);
+      border-left-color: #fbbf2455;
+    }
+    .ticker-item--pinned:hover {
+      background: linear-gradient(90deg, #2a1f0055 0%, var(--bg2) 100%);
+      border-left-color: #fbbf24aa;
+    }
+    .ticker-item--pinned.active {
+      color: #fcd34d;
+      border-left-color: #fbbf24 !important;
+      background: linear-gradient(90deg, #2a1f0066 0%, var(--bg2) 100%);
+    }
+
+    /* ── Ticker pin button (shown on hover or when pinned) ── */
+    .ticker-pin-btn {
+      background: transparent; border: none;
+      color: var(--muted);
+      padding: 0; margin-right: .28rem;
+      font-size: .6rem; cursor: pointer;
+      flex-shrink: 0; line-height: 1;
+      opacity: 0;
+      transition: opacity .12s, color .12s;
+    }
+    .ticker-item:hover .ticker-pin-btn,
+    .ticker-pin-btn.pinned { opacity: 1; }
+    .ticker-pin-btn.pinned { color: #fbbf24; }
+    .ticker-pin-btn:hover  { color: #fbbf24; }
+
+    /* ── Ticker symbol label ── */
+    .ticker-label {
+      flex: 1; min-width: 0;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+
+    /* ── Ticker up/down order controls (shown on hover) ── */
+    .ticker-ctrl {
+      display: flex; gap: .05rem;
+      margin-left: .25rem; flex-shrink: 0;
+      opacity: 0; transition: opacity .15s;
+    }
+    .ticker-item:hover .ticker-ctrl { opacity: 1; }
+    .ticker-order-btn {
+      background: transparent; border: none;
+      color: var(--muted);
+      padding: .1rem .16rem; font-size: .52rem;
+      cursor: pointer; line-height: 1; border-radius: 3px;
+      transition: color .12s, background .12s;
+    }
+    .ticker-order-btn:hover { color: var(--text2); background: var(--bg4); }
+
     .sidebar-nav-btn {
       display: flex;
       align-items: center;

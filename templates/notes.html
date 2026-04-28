@@ -266,25 +266,116 @@
   }
 
   /* ── Tickers ── */
+  let tickerListData = []; // [{symbol, is_pinned, manually_pinned, has_pinned_notes, sort_order}]
+
   async function loadTickers() {
     const res  = await fetch('/api/tickers');
     const json = await res.json();
+    tickerListData = json.tickers || [];
+    renderTickerList();
+  }
+
+  function renderTickerList() {
     const list = document.getElementById('tickerList');
-    if (!json.tickers || !json.tickers.length) {
+    if (!tickerListData.length) {
       list.innerHTML = '<p class="empty-msg" style="padding:.8rem;">尚無資料</p>';
       return;
     }
-    list.innerHTML = json.tickers.map(t => `
-      <div class="ticker-item" onclick="selectTicker('${esc(t)}',this)">
-        ${esc(t)}
-      </div>`).join('');
+    list.innerHTML = tickerListData.map(t => {
+      const sym        = t.symbol;
+      const pinnedCls  = t.is_pinned ? ' ticker-item--pinned' : '';
+      const pinBtnCls  = t.is_pinned ? ' pinned' : '';
+      const activeCls  = sym === activeTicker ? ' active' : '';
+      const pinTitle   = t.manually_pinned
+        ? '取消手動置頂'
+        : (t.has_pinned_notes ? '已自動置頂（有置頂筆記）' : '置頂此 Ticker');
+      return `<div class="ticker-item${pinnedCls}${activeCls}"
+                   onclick="selectTicker('${esc(sym)}',this)"
+                   data-symbol="${esc(sym)}">
+        <button class="ticker-pin-btn${pinBtnCls}"
+                onclick="event.stopPropagation();toggleTickerPin('${esc(sym)}')"
+                title="${pinTitle}">📌</button>
+        <span class="ticker-label">${esc(sym)}</span>
+        <div class="ticker-ctrl">
+          <button class="ticker-order-btn"
+                  onclick="event.stopPropagation();moveTicker('${esc(sym)}','up')"
+                  title="上移">▲</button>
+          <button class="ticker-order-btn"
+                  onclick="event.stopPropagation();moveTicker('${esc(sym)}','down')"
+                  title="下移">▼</button>
+        </div>
+      </div>`;
+    }).join('');
+    // Restore active search filter if any
+    const q = document.getElementById('tickerSearch')?.value || '';
+    if (q) filterTickers(q);
   }
 
   function filterTickers(q) {
     const lower = q.toLowerCase();
     document.querySelectorAll('.ticker-item').forEach(el => {
-      el.style.display = el.textContent.trim().toLowerCase().includes(lower) ? '' : 'none';
+      const sym = (el.dataset.symbol || '').toLowerCase();
+      el.style.display = sym.includes(lower) ? '' : 'none';
     });
+  }
+
+  /* ── Toggle ticker-level pin ── */
+  async function toggleTickerPin(symbol) {
+    const ticker = tickerListData.find(t => t.symbol === symbol);
+    if (!ticker) return;
+    const newManualPin = !ticker.manually_pinned;
+    const res = await fetch('/api/ticker/pin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ symbol, is_pinned: newManualPin }),
+    });
+    if (res.ok) {
+      ticker.manually_pinned = newManualPin;
+      ticker.is_pinned = newManualPin || ticker.has_pinned_notes;
+      tickerListData.sort((a, b) => {
+        if (a.is_pinned !== b.is_pinned) return a.is_pinned ? -1 : 1;
+        if (a.sort_order !== b.sort_order) return a.sort_order - b.sort_order;
+        return a.symbol.localeCompare(b.symbol);
+      });
+      renderTickerList();
+      showToast(ticker.is_pinned ? '📌 Ticker 已置頂' : '✅ 已取消置頂');
+    } else {
+      const json = await res.json();
+      showToast(json.error || '操作失敗', 'error');
+    }
+  }
+
+  /* ── Move ticker up/down within its pin-group ── */
+  async function moveTicker(symbol, direction) {
+    const ticker = tickerListData.find(t => t.symbol === symbol);
+    if (!ticker) return;
+    const pinnedArr   = tickerListData.filter(t => t.is_pinned);
+    const unpinnedArr = tickerListData.filter(t => !t.is_pinned);
+    const group = ticker.is_pinned ? pinnedArr : unpinnedArr;
+    const idx = group.findIndex(t => t.symbol === symbol);
+    if (idx === -1) return;
+    if (direction === 'up'   && idx === 0)              return;
+    if (direction === 'down' && idx === group.length - 1) return;
+
+    const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+    [group[idx], group[swapIdx]] = [group[swapIdx], group[idx]];
+
+    /* pinned group uses base 0; unpinned uses 10000 to avoid overlap */
+    const base = ticker.is_pinned ? 0 : 10000;
+    group.forEach((t, i) => { t.sort_order = base + i; });
+    const reorderData = group.map(t => ({ symbol: t.symbol, sort_order: t.sort_order }));
+
+    const res = await fetch('/api/ticker/reorder', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(reorderData),
+    });
+    if (res.ok) {
+      tickerListData = [...pinnedArr, ...unpinnedArr];
+      renderTickerList();
+    } else {
+      showToast('排序更新失敗', 'error');
+    }
   }
 
   let activeTicker = null;

@@ -159,9 +159,10 @@ def _pattern_type_from_category(category: str) -> str:
         return c
     return "上升"
 
-REST_BASE      = f"{SUPABASE_URL}/rest/v1/{TABLE_NAME}"
-PATTERNS_BASE  = f"{SUPABASE_URL}/rest/v1/{PATTERNS_TABLE}"
-STORAGE_BASE   = f"{SUPABASE_URL}/storage/v1/object"
+REST_BASE             = f"{SUPABASE_URL}/rest/v1/{TABLE_NAME}"
+PATTERNS_BASE         = f"{SUPABASE_URL}/rest/v1/{PATTERNS_TABLE}"
+TICKER_SETTINGS_BASE  = f"{SUPABASE_URL}/rest/v1/ticker_settings"
+STORAGE_BASE          = f"{SUPABASE_URL}/storage/v1/object"
 
 HEADERS = {
     "apikey": SUPABASE_KEY,
@@ -461,12 +462,87 @@ def delete(row_id):
 
 @app.route("/api/tickers")
 def get_tickers():
-    resp = requests.get(REST_BASE, params={"select": "symbol"}, headers=HEADERS)
-    if resp.status_code != 200:
+    # Fetch all symbols
+    resp_all = requests.get(REST_BASE, params={"select": "symbol"}, headers=HEADERS)
+    if resp_all.status_code != 200:
         return jsonify({"error": "查詢失敗"}), 500
-    rows = resp.json() or []
-    tickers = sorted({r["symbol"] for r in rows})
-    return jsonify({"tickers": tickers}), 200
+    all_symbols = {r["symbol"] for r in (resp_all.json() or [])}
+
+    # Fetch symbols that have at least one pinned note (auto-pin detection)
+    resp_pinned = requests.get(
+        REST_BASE, params={"select": "symbol", "is_pinned": "eq.true"}, headers=HEADERS
+    )
+    pinned_note_symbols: set = set()
+    if resp_pinned.status_code == 200:
+        pinned_note_symbols = {r["symbol"] for r in (resp_pinned.json() or [])}
+
+    # Fetch per-ticker settings (manual pin + custom sort order)
+    resp_settings = requests.get(TICKER_SETTINGS_BASE, headers=HEADERS)
+    ticker_settings: dict = {}
+    if resp_settings.status_code == 200:
+        for s in (resp_settings.json() or []):
+            sym = s.get("symbol", "")
+            if sym:
+                ticker_settings[sym] = s
+
+    # Merge: is_pinned = manually_pinned OR has_pinned_notes
+    result = []
+    for sym in all_symbols:
+        s = ticker_settings.get(sym, {})
+        manually_pinned  = bool(s.get("is_pinned", False))
+        has_pinned_notes = sym in pinned_note_symbols
+        is_pinned        = manually_pinned or has_pinned_notes
+        sort_order       = s.get("sort_order", 99999)
+        result.append({
+            "symbol":          sym,
+            "is_pinned":       is_pinned,
+            "manually_pinned": manually_pinned,
+            "has_pinned_notes": has_pinned_notes,
+            "sort_order":      sort_order,
+        })
+
+    result.sort(key=lambda x: (0 if x["is_pinned"] else 1, x["sort_order"], x["symbol"]))
+    return jsonify({"tickers": result}), 200
+
+
+@app.route("/api/ticker/pin", methods=["POST"])
+def pin_ticker():
+    data      = request.get_json() or {}
+    symbol    = (data.get("symbol") or "").strip().upper()
+    is_pinned = bool(data.get("is_pinned", False))
+    if not symbol:
+        return jsonify({"error": "請提供股票代號"}), 400
+    resp = requests.post(
+        TICKER_SETTINGS_BASE,
+        json={"symbol": symbol, "is_pinned": is_pinned},
+        headers={**SERVICE_HEADERS, "Prefer": "resolution=merge-duplicates,return=representation"},
+    )
+    if resp.status_code in (200, 201):
+        return jsonify({"message": "更新成功"}), 200
+    return jsonify({"error": "更新失敗", "detail": resp.text}), 500
+
+
+@app.route("/api/ticker/reorder", methods=["POST"])
+def reorder_tickers():
+    items = request.get_json() or []
+    if not isinstance(items, list):
+        return jsonify({"error": "請提供陣列格式"}), 400
+    errors = []
+    for item in items:
+        symbol     = (item.get("symbol") or "").strip().upper()
+        sort_order = item.get("sort_order", 0)
+        if not symbol:
+            continue
+        r = requests.post(
+            TICKER_SETTINGS_BASE,
+            json={"symbol": symbol, "sort_order": sort_order},
+            headers={**SERVICE_HEADERS, "Prefer": "resolution=merge-duplicates,return=minimal"},
+        )
+        if r.status_code not in (200, 201, 204):
+            errors.append(f"ticker {symbol}: HTTP {r.status_code}")
+    if errors:
+        return jsonify({"error": "部分更新失敗", "details": errors}), 500
+    return jsonify({"message": "排序已更新"}), 200
 
 
 # ── Patterns CRUD ────────────────────────────────────────
